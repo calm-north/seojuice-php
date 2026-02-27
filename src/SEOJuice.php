@@ -19,6 +19,7 @@ use SEOJuice\Resources\KeywordResource;
 use SEOJuice\Resources\LinkResource;
 use SEOJuice\Resources\PageResource;
 use SEOJuice\Resources\ReportResource;
+use SEOJuice\Resources\SimilarResource;
 use SEOJuice\Resources\WebsiteResource;
 
 final class SEOJuice
@@ -107,6 +108,11 @@ final class SEOJuice
     public function gbp(string $domain): GbpResource
     {
         return new GbpResource($this->http, $domain);
+    }
+
+    public function similar(string $domain): SimilarResource
+    {
+        return new SimilarResource($this->http, $domain);
     }
 
     public function smart(): SmartClient
