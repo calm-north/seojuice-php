@@ -345,20 +345,140 @@ foreach ($result->results as $issue) {
 
 ### Changes
 
+Full lifecycle management for SEO changes — list, review, approve, reject, revert, and automate:
+
 ```php
-$result = $client->changes('example.com')->list(
-    status: 'pending',
-    changeType: 'meta_title',
-    riskLevel: 'low',
+use SEOJuice\Enums\ChangeStatus;
+use SEOJuice\Enums\ChangeType;
+
+$changes = $client->changes('example.com');
+
+// Get change statistics
+$stats = $changes->stats();
+echo $stats->total;
+print_r($stats->byStatus);
+print_r($stats->byType);
+
+// List pending changes
+$result = $changes->list(
+    status: ChangeStatus::Pending->value,
+    changeType: ChangeType::MetaDescription->value,
+    url: '/blog',
 );
 
 foreach ($result->results as $change) {
     echo $change->pageUrl;
     echo $change->changeType;
-    echo $change->previousValue . ' -> ' . $change->proposedValue;
+    echo $change->previousValue . ' → ' . $change->proposedValue;
     echo $change->confidenceScore;
-    echo $change->riskLevel;
 }
+
+// Get a specific change
+$change = $changes->get(42);
+
+// Approve / reject / revert
+$changes->approve(42);
+$changes->reject(43, reason: 'Not aligned with brand voice');
+$changes->revert(44, reason: 'Caused ranking drop');
+
+// Pull (mark as deployed by integration) and verify
+$changes->pull(45, integration: 'wordpress');
+$changes->verify(45);
+
+// Bulk actions
+$result = $changes->bulk(
+    action: 'approve',
+    changeIds: [10, 11, 12],
+);
+echo "Succeeded: {$result->totalSucceeded}";
+
+// Automation settings
+$settings = $changes->settings();
+echo $settings->automationMode;
+
+$changes->updateSettings(
+    autoApproveInternalLinks: true,
+    autoApproveMetaDescriptions: false,
+);
+```
+
+### Action Items
+
+```php
+$actions = $client->actionItems('example.com');
+
+// Get summary
+$summary = $actions->summary();
+echo "Total: {$summary->total}, Open: {$summary->open}";
+
+// List action items
+$result = $actions->list(priority: 'high', status: 'open');
+
+foreach ($result->results as $item) {
+    echo "[{$item->priority}] {$item->title}";
+}
+
+// Get grouped by category
+$groups = $actions->groups();
+foreach ($groups->results as $group) {
+    echo "{$group->category}: {$group->count} items";
+}
+
+// Create and update
+$actions->create(
+    title: 'Fix missing alt tags on product images',
+    priority: 'high',
+    category: 'accessibility',
+);
+
+$actions->update(id: 99, status: 'completed');
+```
+
+### Domain Health
+
+```php
+$health = $client->domainHealth('example.com')->get();
+```
+
+### SERP Landscape
+
+```php
+$serp = $client->serpLandscape('example.com')->get();
+```
+
+### Benchmarks
+
+```php
+$benchmarks = $client->benchmarks('example.com')->get();
+```
+
+### Page Content, Content Quality & Geo Readiness
+
+These are page-scoped endpoints accessed via `PageResource`:
+
+```php
+$pages = $client->pages('example.com');
+
+// Get raw page content
+$content = $pages->content('page-id-123');
+
+// Content quality score
+$quality = $pages->contentQuality('page-id-123');
+
+// Geo readiness score
+$geo = $pages->geoReadiness('page-id-123');
+```
+
+### URL Submission
+
+```php
+$urls = $client->urls('example.com');
+
+// Submit URLs for processing
+$urls->submit(urls: ['https://example.com/new-page']);
+
+// Check processing status
+$status = $urls->status(url: 'https://example.com/new-page');
 ```
 
 ### Google Business Profile
@@ -431,6 +551,61 @@ do {
     $page++;
 } while ($result->hasNextPage());
 ```
+
+## Auto-Pagination
+
+Use `AutoPaginator` to iterate through all pages of results automatically:
+
+```php
+use SEOJuice\AutoPaginator;
+
+// Using the generator (memory-efficient)
+foreach (AutoPaginator::paginate(
+    fn (int $page, int $pageSize) => $client->pages('example.com')->list(page: $page, pageSize: $pageSize),
+    pageSize: 50,
+) as $page) {
+    echo $page->url;
+}
+
+// Or collect all results into an array
+$allPages = AutoPaginator::all(
+    fn (int $page, int $pageSize) => $client->pages('example.com')->list(page: $page, pageSize: $pageSize),
+    pageSize: 100,
+);
+
+echo count($allPages) . ' total pages';
+```
+
+## Webhook Verification
+
+Verify incoming webhook signatures using HMAC-SHA256:
+
+```php
+$webhookSecret = getenv('SEOJUICE_WEBHOOK_SECRET') ?: '';
+$rawBody = file_get_contents('php://input');
+$signature = $_SERVER['HTTP_X_SEOJUICE_SIGNATURE'] ?? null;
+
+$expected = hash_hmac('sha256', $rawBody, $webhookSecret);
+$isValid = hash_equals($expected, $signature ?? '');
+
+if (!$isValid) {
+    http_response_code(401);
+    exit;
+}
+
+$payload = json_decode($rawBody, true);
+
+match ($payload['event']) {
+    'change.created'  => handleChangeCreated($payload),
+    'change.approved' => handleChangeApproved($payload),
+    'change.applied'  => handleChangeApplied($payload),
+    'change.reverted' => handleChangeReverted($payload),
+    'change.rejected' => handleChangeRejected($payload),
+    default           => null,
+};
+```
+
+See [`examples/webhook_receiver.php`](examples/webhook_receiver.php) for a complete receiver with async processing.
 
 ## SSR Injection (Smart Client)
 
@@ -510,6 +685,9 @@ Use an event subscriber to inject SEO tags on `kernel.response`. See [examples/s
 | Example | Description |
 |---------|-------------|
 | [intelligence_api.php](examples/intelligence_api.php) | Full API workflow: summary, content gaps, decay alerts, topology, PageSpeed, accessibility |
+| [changes_management.php](examples/changes_management.php) | Change lifecycle: stats, triage, bulk approve, review/reject, automation settings |
+| [webhook_receiver.php](examples/webhook_receiver.php) | Webhook receiver with HMAC-SHA256 signature verification |
+| [action_items.php](examples/action_items.php) | Action items: summary, listing, groups, create, update |
 | [laravel.php](examples/laravel.php) | Laravel service provider, middleware, controller, Artisan command |
 | [symfony.php](examples/symfony.php) | Symfony event subscriber, Twig extension, controller |
 | [drupal.php](examples/drupal.php) | Drupal 10 module: hooks, block plugin, services |

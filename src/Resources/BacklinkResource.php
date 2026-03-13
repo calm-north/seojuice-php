@@ -35,7 +35,7 @@ final class BacklinkResource
 
     public function listDomains(int $page = 1, int $pageSize = 10): PaginatedResult
     {
-        $data = $this->http->get("websites/{$this->domain}/backlinks/domains/", [
+        $data = $this->http->get("websites/{$this->domain}/backlink-domains/", [
             'page' => $page,
             'page_size' => $pageSize,
         ]);

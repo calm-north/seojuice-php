@@ -65,4 +65,28 @@ final class PageResource
 
         return PaginatedResult::fromArray($data, fn (array $item) => MetricsHistory::fromArray($item));
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function content(string $pageId): array
+    {
+        return $this->http->get("websites/{$this->domain}/pages/{$pageId}/content/");
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function contentQuality(string $pageId): array
+    {
+        return $this->http->get("websites/{$this->domain}/pages/{$pageId}/content-quality/");
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function geoReadiness(string $pageId): array
+    {
+        return $this->http->get("websites/{$this->domain}/pages/{$pageId}/geo-readiness/");
+    }
 }

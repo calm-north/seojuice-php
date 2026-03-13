@@ -10,12 +10,15 @@ final class ContentDecayAlert
     public readonly ?string $pageUrl;
     public readonly string $severity;
     public readonly string $decayType;
-    public readonly ?int $clicksPrevious;
+    public readonly ?int $clicksBaseline;
     public readonly ?int $clicksCurrent;
-    public readonly ?int $impressionsPrevious;
+    public readonly ?float $clicksChangePct;
+    public readonly ?int $impressionsBaseline;
     public readonly ?int $impressionsCurrent;
-    public readonly ?float $positionPrevious;
+    public readonly ?float $impressionsChangePct;
+    public readonly ?float $positionBaseline;
     public readonly ?float $positionCurrent;
+    public readonly ?float $positionChangePct;
     public readonly bool $isActive;
     public readonly string $detectedAt;
     public readonly ?string $resolvedAt;
@@ -30,12 +33,15 @@ final class ContentDecayAlert
         ?string $pageUrl,
         string $severity,
         string $decayType,
-        ?int $clicksPrevious,
+        ?int $clicksBaseline,
         ?int $clicksCurrent,
-        ?int $impressionsPrevious,
+        ?float $clicksChangePct,
+        ?int $impressionsBaseline,
         ?int $impressionsCurrent,
-        ?float $positionPrevious,
+        ?float $impressionsChangePct,
+        ?float $positionBaseline,
         ?float $positionCurrent,
+        ?float $positionChangePct,
         bool $isActive,
         string $detectedAt,
         ?string $resolvedAt,
@@ -45,12 +51,15 @@ final class ContentDecayAlert
         $this->pageUrl = $pageUrl;
         $this->severity = $severity;
         $this->decayType = $decayType;
-        $this->clicksPrevious = $clicksPrevious;
+        $this->clicksBaseline = $clicksBaseline;
         $this->clicksCurrent = $clicksCurrent;
-        $this->impressionsPrevious = $impressionsPrevious;
+        $this->clicksChangePct = $clicksChangePct;
+        $this->impressionsBaseline = $impressionsBaseline;
         $this->impressionsCurrent = $impressionsCurrent;
-        $this->positionPrevious = $positionPrevious;
+        $this->impressionsChangePct = $impressionsChangePct;
+        $this->positionBaseline = $positionBaseline;
         $this->positionCurrent = $positionCurrent;
+        $this->positionChangePct = $positionChangePct;
         $this->isActive = $isActive;
         $this->detectedAt = $detectedAt;
         $this->resolvedAt = $resolvedAt;
@@ -67,12 +76,15 @@ final class ContentDecayAlert
             pageUrl: $data['page_url'] ?? null,
             severity: (string) ($data['severity'] ?? ''),
             decayType: (string) ($data['decay_type'] ?? ''),
-            clicksPrevious: isset($data['clicks_previous']) ? (int) $data['clicks_previous'] : null,
+            clicksBaseline: isset($data['clicks_baseline']) ? (int) $data['clicks_baseline'] : null,
             clicksCurrent: isset($data['clicks_current']) ? (int) $data['clicks_current'] : null,
-            impressionsPrevious: isset($data['impressions_previous']) ? (int) $data['impressions_previous'] : null,
+            clicksChangePct: isset($data['clicks_change_pct']) ? (float) $data['clicks_change_pct'] : null,
+            impressionsBaseline: isset($data['impressions_baseline']) ? (int) $data['impressions_baseline'] : null,
             impressionsCurrent: isset($data['impressions_current']) ? (int) $data['impressions_current'] : null,
-            positionPrevious: isset($data['position_previous']) ? (float) $data['position_previous'] : null,
+            impressionsChangePct: isset($data['impressions_change_pct']) ? (float) $data['impressions_change_pct'] : null,
+            positionBaseline: isset($data['position_baseline']) ? (float) $data['position_baseline'] : null,
             positionCurrent: isset($data['position_current']) ? (float) $data['position_current'] : null,
+            positionChangePct: isset($data['position_change_pct']) ? (float) $data['position_change_pct'] : null,
             isActive: (bool) ($data['is_active'] ?? false),
             detectedAt: (string) ($data['detected_at'] ?? ''),
             resolvedAt: $data['resolved_at'] ?? null,

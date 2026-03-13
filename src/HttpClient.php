@@ -79,6 +79,28 @@ class HttpClient
     }
 
     /**
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    public function patch(string $path, array $body = []): array
+    {
+        $url = $this->buildUrl($path, []);
+
+        try {
+            $response = $this->client->request('PATCH', $url, [
+                'json' => $body,
+            ]);
+            $responseBody = (string) $response->getBody();
+
+            return json_decode($responseBody, true, 512, JSON_THROW_ON_ERROR);
+        } catch (RequestException $e) {
+            $this->handleRequestException($e);
+        } catch (GuzzleException $e) {
+            throw new SEOJuiceException($e->getMessage(), 'network_error');
+        }
+    }
+
+    /**
      * @param array<string, mixed> $query
      */
     public function getRaw(string $path, array $query = []): string

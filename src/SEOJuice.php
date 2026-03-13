@@ -6,20 +6,25 @@ namespace SEOJuice;
 
 use SEOJuice\Injection\SmartClient;
 use SEOJuice\Resources\AccessibilityResource;
+use SEOJuice\Resources\ActionItemResource;
 use SEOJuice\Resources\AisoResource;
 use SEOJuice\Resources\AnalysisResource;
 use SEOJuice\Resources\BacklinkResource;
+use SEOJuice\Resources\BenchmarkResource;
 use SEOJuice\Resources\ChangeResource;
 use SEOJuice\Resources\ClusterResource;
 use SEOJuice\Resources\CompetitorResource;
 use SEOJuice\Resources\ContentResource;
+use SEOJuice\Resources\DomainHealthResource;
 use SEOJuice\Resources\GbpResource;
 use SEOJuice\Resources\IntelligenceResource;
 use SEOJuice\Resources\KeywordResource;
 use SEOJuice\Resources\LinkResource;
 use SEOJuice\Resources\PageResource;
 use SEOJuice\Resources\ReportResource;
+use SEOJuice\Resources\SerpLandscapeResource;
 use SEOJuice\Resources\SimilarResource;
+use SEOJuice\Resources\UrlResource;
 use SEOJuice\Resources\WebsiteResource;
 
 final class SEOJuice
@@ -113,6 +118,31 @@ final class SEOJuice
     public function similar(string $domain): SimilarResource
     {
         return new SimilarResource($this->http, $domain);
+    }
+
+    public function actionItems(string $domain): ActionItemResource
+    {
+        return new ActionItemResource($this->http, $domain);
+    }
+
+    public function domainHealth(string $domain): DomainHealthResource
+    {
+        return new DomainHealthResource($this->http, $domain);
+    }
+
+    public function serpLandscape(string $domain): SerpLandscapeResource
+    {
+        return new SerpLandscapeResource($this->http, $domain);
+    }
+
+    public function benchmarks(string $domain): BenchmarkResource
+    {
+        return new BenchmarkResource($this->http, $domain);
+    }
+
+    public function urls(string $domain): UrlResource
+    {
+        return new UrlResource($this->http, $domain);
     }
 
     public function smart(): SmartClient

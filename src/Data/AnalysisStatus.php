@@ -41,7 +41,7 @@ final class AnalysisStatus
 
     public function isComplete(): bool
     {
-        return $this->status === 'complete';
+        return $this->status === 'completed';
     }
 
     public function isFailed(): bool

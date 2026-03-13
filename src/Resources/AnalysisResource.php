@@ -18,7 +18,7 @@ final class AnalysisResource
 
     public function submit(string $url): AnalysisStatus
     {
-        $data = $this->http->post("websites/{$this->domain}/analysis/", [
+        $data = $this->http->post("websites/{$this->domain}/analyze/", [
             'url' => $url,
         ]);
 
@@ -27,7 +27,7 @@ final class AnalysisResource
 
     public function status(string $analysisId): AnalysisStatus
     {
-        $data = $this->http->get("websites/{$this->domain}/analysis/{$analysisId}/");
+        $data = $this->http->get("websites/{$this->domain}/analyze/{$analysisId}/");
 
         return AnalysisStatus::fromArray($data);
     }

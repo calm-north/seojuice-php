@@ -23,7 +23,7 @@ final class AccessibilityResource
         int $page = 1,
         int $pageSize = 10,
     ): PaginatedResult {
-        $data = $this->http->get("websites/{$this->domain}/accessibility/", [
+        $data = $this->http->get("websites/{$this->domain}/accessibility-issues/", [
             'severity' => $severity,
             'category' => $category,
             'auto_fixable' => $autoFixable !== null ? ($autoFixable ? 'true' : 'false') : null,

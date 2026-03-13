@@ -23,7 +23,7 @@ final class ContentResource
         int $page = 1,
         int $pageSize = 10,
     ): PaginatedResult {
-        $data = $this->http->get("websites/{$this->domain}/content/gaps/", [
+        $data = $this->http->get("websites/{$this->domain}/content-gaps/", [
             'category' => $category,
             'intent' => $intent,
             'page' => $page,
@@ -40,7 +40,7 @@ final class ContentResource
         int $page = 1,
         int $pageSize = 10,
     ): PaginatedResult {
-        $data = $this->http->get("websites/{$this->domain}/content/decay-alerts/", [
+        $data = $this->http->get("websites/{$this->domain}/content-decay/", [
             'is_active' => $isActive !== null ? ($isActive ? 'true' : 'false') : null,
             'severity' => $severity,
             'decay_type' => $decayType,

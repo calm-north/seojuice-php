@@ -23,7 +23,7 @@ final class IntelligenceResource
         bool $includeHistory = false,
         bool $includeTrends = false,
     ): IntelligenceSummary {
-        $data = $this->http->get("websites/{$this->domain}/intelligence/summary/", [
+        $data = $this->http->get("websites/{$this->domain}/intelligence/", [
             'period' => $period->value,
             'include_history' => $includeHistory ? 'true' : null,
             'include_trends' => $includeTrends ? 'true' : null,
@@ -34,14 +34,14 @@ final class IntelligenceResource
 
     public function topology(): Topology
     {
-        $data = $this->http->get("websites/{$this->domain}/intelligence/topology/");
+        $data = $this->http->get("websites/{$this->domain}/topology/");
 
         return Topology::fromArray($data);
     }
 
     public function pageSpeed(string $url): PageSpeed
     {
-        $data = $this->http->get("websites/{$this->domain}/intelligence/page-speed/", [
+        $data = $this->http->get("websites/{$this->domain}/pagespeed/", [
             'url' => $url,
         ]);
 
