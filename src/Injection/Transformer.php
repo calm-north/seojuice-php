@@ -57,6 +57,24 @@ final class Transformer
     }
 
     /**
+     * Replace the first match of $pattern with $replacement, treating
+     * $replacement as a LITERAL string. Unlike preg_replace, this never
+     * interprets `$n`/`${n}`/`\n`/`\0` in the replacement as backreferences —
+     * essential because $replacement is built from escapeHtml() output, and
+     * htmlspecialchars does not neutralize `$` or `\` (e.g. API text "Save $5"
+     * or "Deal \0 backref" would otherwise corrupt the output).
+     */
+    private static function replaceFirstLiteral(string $pattern, string $replacement, string $subject): string
+    {
+        return (string) preg_replace_callback(
+            $pattern,
+            static fn (): string => $replacement,
+            $subject,
+            1,
+        );
+    }
+
+    /**
      * @param array<string, mixed> $data
      * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest
      */
@@ -72,70 +90,63 @@ final class Transformer
         $structuredData = (string) ($data['structured_data'] ?? '');
 
         if ($title !== '' && !preg_match('/<title[\s>]/i', $html)) {
-            $html = (string) preg_replace(
+            $html = self::replaceFirstLiteral(
                 '/<\/head>/i',
                 '<title data-seojuice="title">' . self::escapeHtml($title) . "</title>\n</head>",
                 $html,
-                1,
             );
             $manifest['meta'][] = 'title';
         }
 
         if ($metaDescription !== '' && !preg_match('/<meta\s+name=["\']description["\']/i', $html)) {
-            $html = (string) preg_replace(
+            $html = self::replaceFirstLiteral(
                 '/<\/head>/i',
                 '<meta name="description" content="' . self::escapeHtml($metaDescription) . "\" data-seojuice=\"meta-description\">\n</head>",
                 $html,
-                1,
             );
             $manifest['meta'][] = 'meta-description';
         }
 
         if ($metaKeywords !== '' && !preg_match('/<meta\s+name=["\']keywords["\']/i', $html)) {
-            $html = (string) preg_replace(
+            $html = self::replaceFirstLiteral(
                 '/<\/head>/i',
                 '<meta name="keywords" content="' . self::escapeHtml($metaKeywords) . "\" data-seojuice=\"meta-keywords\">\n</head>",
                 $html,
-                1,
             );
             $manifest['meta'][] = 'meta-keywords';
         }
 
         if ($ogTitle !== '' && !preg_match('/<meta\s+property=["\']og:title["\']/i', $html)) {
-            $html = (string) preg_replace(
+            $html = self::replaceFirstLiteral(
                 '/<\/head>/i',
                 '<meta property="og:title" content="' . self::escapeHtml($ogTitle) . "\" data-seojuice=\"og-title\">\n</head>",
                 $html,
-                1,
             );
             $manifest['meta'][] = 'og-title';
         }
 
         if ($ogDescription !== '' && !preg_match('/<meta\s+property=["\']og:description["\']/i', $html)) {
-            $html = (string) preg_replace(
+            $html = self::replaceFirstLiteral(
                 '/<\/head>/i',
                 '<meta property="og:description" content="' . self::escapeHtml($ogDescription) . "\" data-seojuice=\"og-description\">\n</head>",
                 $html,
-                1,
             );
             $manifest['meta'][] = 'og-description';
         }
 
         if ($ogUrl !== '' && !preg_match('/<meta\s+property=["\']og:url["\']/i', $html)) {
-            $html = (string) preg_replace(
+            $html = self::replaceFirstLiteral(
                 '/<\/head>/i',
                 '<meta property="og:url" content="' . self::escapeHtml($ogUrl) . "\">\n</head>",
                 $html,
-                1,
             );
         }
 
         if ($ogImage !== '' && !preg_match('/<meta\s+property=["\']og:image["\']/i', $html)) {
-            $html = (string) preg_replace(
+            $html = self::replaceFirstLiteral(
                 '/<\/head>/i',
                 '<meta property="og:image" content="' . self::escapeHtml($ogImage) . "\">\n</head>",
                 $html,
-                1,
             );
         }
 
@@ -145,11 +156,10 @@ final class Transformer
 
             if (is_array($obj) && !preg_match('/<script[^>]*type=["\']application\/ld\+json["\'][^>]*>/i', $html)) {
                 $json = json_encode($obj, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-                $html = (string) preg_replace(
+                $html = self::replaceFirstLiteral(
                     '/<\/head>/i',
                     '<script type="application/ld+json" data-seojuice="schema">' . $json . "</script>\n</head>",
                     $html,
-                    1,
                 );
                 $manifest['schema'] = 1;
             }
@@ -211,16 +221,18 @@ final class Transformer
                 $altText = self::escapeHtml($imageMap[$normalizedSrc]);
                 $manifest['img']++;
 
+                // $altText comes from escapeHtml() and may contain `$` or `\`; use
+                // literal replacement so those are never read as backreferences.
                 if ($hasAlt) {
-                    $replaced = (string) preg_replace('/alt=["\'][^"\']*["\']/', 'alt="' . $altText . '"', $match, 1);
+                    $replaced = self::replaceFirstLiteral('/alt=["\'][^"\']*["\']/', 'alt="' . $altText . '"', $match);
                     if (!str_contains($replaced, 'data-seojuice=')) {
-                        $replaced = (string) preg_replace('/<img/', '<img data-seojuice="alt"', $replaced, 1);
+                        $replaced = self::replaceFirstLiteral('/<img/', '<img data-seojuice="alt"', $replaced);
                     }
 
                     return $replaced;
                 }
 
-                return (string) preg_replace('/<img/', '<img alt="' . $altText . '" data-seojuice="alt"', $match, 1);
+                return self::replaceFirstLiteral('/<img/', '<img alt="' . $altText . '" data-seojuice="alt"', $match);
             },
             $html,
         );
@@ -485,9 +497,10 @@ final class Transformer
             return false;
         }
 
-        // broken_link_fixes and h1 are treated as actionable alongside the WP-ported
-        // fields — both are first-class parity features (Tasks 3 and 7) that WP's
-        // original hasContent check predates and never accounted for.
+        // broken_link_fixes is treated as actionable alongside the WP-ported fields
+        // (matches the node/python C1 list). h1 is intentionally NOT actionable on
+        // its own — an h1-only payload flips C1 false so the content no-ops while
+        // the SSR flag still emits, matching node/python exactly.
         $hasContent = !empty($data['title'])
             || !empty($data['meta_description'])
             || !empty($data['suggestions'])
@@ -495,7 +508,6 @@ final class Transformer
             || !empty($data['structured_data'])
             || !empty($data['og_title'])
             || !empty($data['broken_link_fixes'])
-            || !empty($data['h1'])
             || (isset($data['diffs']) && is_array($data['diffs']) && $data['diffs'] !== []);
 
         if (!$hasContent) {

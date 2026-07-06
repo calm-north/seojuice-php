@@ -21,22 +21,30 @@ final class SeoInjectorTest extends TestCase
         return "<html><head>{$headContent}</head><body>{$bodyContent}</body></html>";
     }
 
-    public function testInjectReturnsUnchangedHtmlWhenValidationFails(): void
+    public function testInjectSkipsContentButStillEmitsSsrFlagWhenValidationFails(): void
     {
         $html = $this->makeHtml();
 
-        $result = $this->injector->inject($html, ['errors' => ['boom']]);
+        $result = $this->injector->inject($html, ['errors' => ['boom'], 'title' => 'Should Not Appear']);
 
-        $this->assertSame($html, $result);
+        // C1 gates only the content-mutating transforms — the SSR flag is always
+        // emitted (matches node/python + the Worker), so the output is NOT the
+        // original, but the title/content transforms did not run.
+        $this->assertStringNotContainsString('Should Not Appear', $result);
+        $this->assertStringContainsString('window.seojuiceSSR = true;', $result);
     }
 
-    public function testInjectReturnsUnchangedHtmlWhenNothingActionable(): void
+    public function testInjectSkipsContentButStillEmitsSsrFlagWhenNothingActionable(): void
     {
         $html = $this->makeHtml();
 
         $result = $this->injector->inject($html, []);
 
-        $this->assertSame($html, $result);
+        // Empty payload: no content transform runs, so the manifest stays empty
+        // and NO manifest comment is added (matches failopen_empty_payload vector);
+        // the SSR flag is still emitted unconditionally.
+        $this->assertStringContainsString('window.seojuiceSSR = true;', $result);
+        $this->assertStringNotContainsString('<!-- seojuice:', $result);
     }
 
     public function testInjectAddsTitleAndMarksManifest(): void
@@ -101,9 +109,23 @@ final class SeoInjectorTest extends TestCase
     {
         $html = $this->makeHtml('', '<h1>Old Heading</h1><p>Body content long enough to survive the fail-open ratio check.</p>');
 
-        $result = $this->injector->inject($html, ['h1' => 'New Heading']);
+        // h1 alone does not satisfy C1 (matches node/python), so pair it with a
+        // title to make the payload actionable and exercise the h1 transform.
+        $result = $this->injector->inject($html, ['title' => 'A Title', 'h1' => 'New Heading']);
 
         $this->assertStringContainsString('<h1 data-seojuice="h1">New Heading</h1>', $result);
+    }
+
+    public function testInjectH1OnlyPayloadIsContentNoOpButEmitsSsrFlag(): void
+    {
+        $html = $this->makeHtml('', '<h1>Old Heading</h1><p>Body content long enough to survive the fail-open ratio check.</p>');
+
+        $result = $this->injector->inject($html, ['h1' => 'New Heading']);
+
+        // h1-only payload flips C1 false: heading is left untouched, SSR flag still emitted.
+        $this->assertStringContainsString('<h1>Old Heading</h1>', $result);
+        $this->assertStringNotContainsString('New Heading', $result);
+        $this->assertStringContainsString('window.seojuiceSSR = true;', $result);
     }
 
     public function testInjectAppliesBrokenLinkFix(): void

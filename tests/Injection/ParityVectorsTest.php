@@ -11,27 +11,24 @@ use SEOJuice\Injection\SeoInjector;
 final class ParityVectorsTest extends TestCase
 {
     /**
-     * Vectors that cannot byte-match the raw-Worker expected_html once this SDK's
-     * documented deltas are applied. Both are pinned intentionally by their own
-     * "notes" field — this is not a regression:
+     * The one vector that cannot byte-match the raw-Worker expected_html once
+     * this SDK's documented delta is applied — pinned intentionally by its own
+     * "notes" field, not a regression:
      *
      * - brokenlink_legacy_replacement_url_worker_noop: the vector pins the raw
      *   Worker's GAP behavior (new_url-only, no replacement_url fallback). Task 7
      *   deliberately implements the GENERAL-plan delta (new_url ?: replacement_url),
      *   so this SDK correctly APPLIES the fix where the vector expects a no-op.
      *   Covered instead by TransformerTest::testApplyBrokenLinkFixesReplacesViaLegacyReplacementUrlWhenNewUrlEmpty.
-     * - failopen_empty_payload_ssr_flag_only: an all-empty-but-error-free payload.
-     *   The raw Worker has no C1 concept and always appends the SSR flag; this SDK's
-     *   C1 gate (required by the GENERAL plan, ported from WP validate_api_response)
-     *   correctly treats "nothing actionable" as reject-and-return-original before
-     *   the SSR flag step ever runs. C1 and this pre-C1 vector are structurally
-     *   incompatible for this one payload shape.
+     *
+     * (failopen_empty_payload_ssr_flag_only now passes by strict equality: C1
+     * gates only the content transforms, and the SSR flag is emitted
+     * unconditionally — matching the Worker + node/python.)
      *
      * @var array<int, string>
      */
     private const KNOWN_C1_DELTA_MISMATCHES = [
         'brokenlink_legacy_replacement_url_worker_noop',
-        'failopen_empty_payload_ssr_flag_only',
     ];
 
     /**

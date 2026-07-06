@@ -116,6 +116,22 @@ final class TransformerTest extends TestCase
         $this->assertSame(0, $manifest['schema']);
     }
 
+    public function testReplaceMetaTagsInjectsDollarAndBackslashTextVerbatim(): void
+    {
+        // htmlspecialchars does not neutralize `$` or `\`; if the replacement were
+        // interpolated, `$5`/`$1` (nonexistent groups) would be dropped and
+        // `\0`/`$0` would splice in the whole match (</head>). Assert verbatim.
+        $manifest = $this->emptyManifest();
+        $data = [
+            'title' => 'Save $5 now $1 deal',
+            'meta_description' => 'Deal \0 and \1 backref $0 test',
+        ];
+        $html = Transformer::replaceMetaTags('<html><head></head><body></body></html>', $data, $manifest);
+
+        $this->assertStringContainsString('<title data-seojuice="title">Save $5 now $1 deal</title>', $html);
+        $this->assertStringContainsString('content="Deal \0 and \1 backref $0 test" data-seojuice="meta-description"', $html);
+    }
+
     private function extractHeadInner(string $html): string
     {
         preg_match('/<head>(.*)<\/head>/s', $html, $m);
@@ -188,6 +204,26 @@ final class TransformerTest extends TestCase
 
         $this->assertSame('<img src="//x.com/a.png">', $html);
         $this->assertSame(0, $manifest['img']);
+    }
+
+    public function testReplaceImagesInjectsDollarBackslashAltVerbatimWhenReplacingShortAlt(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['images' => [['url' => 'https://x.com/a.png', 'alt_text' => 'Cost $5 or $1 \0 \1']]];
+        $html = Transformer::replaceImages('<img src="//x.com/a.png" alt="hi">', $data, $manifest);
+
+        $this->assertStringContainsString('alt="Cost $5 or $1 \0 \1"', $html);
+        $this->assertSame(1, $manifest['img']);
+    }
+
+    public function testReplaceImagesInjectsDollarBackslashAltVerbatimWhenAltMissing(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['images' => [['url' => 'https://x.com/a.png', 'alt_text' => 'Price $9 back\0slash']]];
+        $html = Transformer::replaceImages('<img src="//x.com/a.png">', $data, $manifest);
+
+        $this->assertStringContainsString('alt="Price $9 back\0slash"', $html);
+        $this->assertSame(1, $manifest['img']);
     }
 
     public function testInjectInternalLinksFirstOccurrenceOnlyWithCsMarker(): void
@@ -377,9 +413,10 @@ final class TransformerTest extends TestCase
         $this->assertFalse(Transformer::validateApiResponse(['title' => 'T', 'broken_link_fixes' => 'nope']));
     }
 
-    public function testValidateApiResponseAcceptsWhenOnlyH1Present(): void
+    public function testValidateApiResponseRejectsWhenOnlyH1Present(): void
     {
-        $this->assertTrue(Transformer::validateApiResponse(['h1' => 'New Heading']));
+        // h1 is intentionally not actionable on its own — matches node/python C1.
+        $this->assertFalse(Transformer::validateApiResponse(['h1' => 'New Heading']));
     }
 
     public function testInjectInternalLinksContentAreaLinksInsideParagraphNotNav(): void
