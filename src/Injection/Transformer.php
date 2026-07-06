@@ -9,6 +9,7 @@ final class Transformer
     public const SKIP_TAG_RE = '/^<(a|script|style|title|h[1-6])[\s\/>]/i';
     public const CLOSE_TAG_RE = '/^<\/(a|script|style|title|h[1-6])>/i';
     private const SINGLE_ROOT_RE = '/^<(\w+)(\s[^>]*)?>/';
+    private const SCRIPT_STYLE_RE = '/(<(script|style)\b[^>]*>)(.*?)(<\/\2>)/is';
     private const VOID_TAGS = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
     private const CONTENT_AREA_TAGS = ['p', 'li', 'span', 'div', 'td', 'blockquote', 'dd', 'figcaption'];
 
@@ -151,8 +152,17 @@ final class Transformer
         }
 
         if ($structuredData !== '' && $structuredData !== 'null') {
-            $inner = json_decode($structuredData, true);
-            $obj = is_string($inner) ? json_decode($inner, true) : null;
+            // Defensive single-or-double decode: the real /suggestions payload
+            // (build_page_suggestions_payload) serializes structured_data as a
+            // SINGLE json.dumps(dict) — a JSON string of the object. A legacy
+            // caller may still send it double-encoded (a JSON string containing
+            // an inner JSON string). Decode once; if the result is still a
+            // string, decode again. Either shape must produce byte-identical
+            // injected JSON-LD.
+            $obj = json_decode($structuredData, true);
+            if (is_string($obj)) {
+                $obj = json_decode($obj, true);
+            }
 
             if (is_array($obj) && !preg_match('/<script[^>]*type=["\']application\/ld\+json["\'][^>]*>/i', $html)) {
                 $json = json_encode($obj, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -273,7 +283,7 @@ final class Transformer
 
             $escapedKeyword = preg_quote($keyword, '/');
             $pattern = $isAsian
-                ? '/(?<=[\p{Han}\p{Hiragana}\p{Katakana}]|^)(' . $escapedKeyword . ')(?=[\p{Han}\p{Hiragana}\p{Katakana}.!?)\]\/]|$)/u'
+                ? '/(?<=[\p{Han}\p{Hiragana}\p{Katakana}]|^)(' . $escapedKeyword . ')(?=[\p{Han}\p{Hiragana}\p{Katakana}.!?)\]\/。、！？）」』]|$)/u'
                 : '/(?<=^|\s|[([{<>"\'«‹„"\'|\/]|\-|:)(' . $escapedKeyword . ')(?=$|\s|[)\]}>"\'»›"\'|\/]|\-|[.,:;!?])/i';
 
             $links[] = [
@@ -406,6 +416,27 @@ final class Transformer
     }
 
     /**
+     * Blanks the *contents* of every <script>/<style> element (tags kept, body
+     * replaced with equal-length \x00 runs) so the occurrence/ambiguity checks
+     * in applyContentDiffs() only ever "see" the visible document. Same byte
+     * length as the input, so an index found in the masked copy is valid
+     * against the real html too. Frameworks like Next.js App Router serialize
+     * the pre-transform page text into a `__next_f` hydration <script>;
+     * without masking, that duplicate trips the ambiguity guard and the diff
+     * never applies to the visible body.
+     */
+    private static function maskScriptStyle(string $html): string
+    {
+        return (string) preg_replace_callback(
+            self::SCRIPT_STYLE_RE,
+            static function (array $matches): string {
+                return $matches[1] . str_repeat("\x00", strlen($matches[3])) . $matches[4];
+            },
+            $html,
+        );
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $diffs
      * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest
      */
@@ -420,17 +451,19 @@ final class Transformer
                     continue;
                 }
 
-                if (str_contains($html, $replacement) && !str_contains($html, $original)) {
+                $masked = self::maskScriptStyle($html);
+
+                if (str_contains($masked, $replacement) && !str_contains($masked, $original)) {
                     continue; // already applied
                 }
 
-                $idx = strpos($html, $original);
+                $idx = strpos($masked, $original);
                 if ($idx === false) {
-                    continue; // DOM drift → skip
+                    continue; // not in the visible region → skip (DOM drift, or only in script/style)
                 }
 
-                if (strpos($html, $original, $idx + 1) !== false) {
-                    continue; // ambiguous → skip
+                if (strpos($masked, $original, $idx + strlen($original)) !== false) {
+                    continue; // ambiguous in the visible region → skip
                 }
 
                 $id = $diff['id'] ?? null;

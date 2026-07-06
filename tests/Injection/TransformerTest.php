@@ -105,6 +105,27 @@ final class TransformerTest extends TestCase
         $this->assertSame(1, $manifest['schema']);
     }
 
+    public function testReplaceMetaTagsSingleDecodesStructuredData(): void
+    {
+        // The real /suggestions payload (build_page_suggestions_payload) is
+        // single-encoded — a plain json_encode($dict), not double-wrapped.
+        $manifest = $this->emptyManifest();
+        $raw = json_encode(['@type' => 'Article'], JSON_UNESCAPED_SLASHES);
+        $html = Transformer::replaceMetaTags('<html><head></head><body></body></html>', ['structured_data' => $raw], $manifest);
+
+        $this->assertStringContainsString('<script type="application/ld+json" data-seojuice="schema">{"@type":"Article"}</script>', $html);
+        $this->assertSame(1, $manifest['schema']);
+    }
+
+    public function testReplaceMetaTagsSkipsMalformedStructuredDataWithoutThrowing(): void
+    {
+        $manifest = $this->emptyManifest();
+        $html = Transformer::replaceMetaTags('<html><head></head><body></body></html>', ['structured_data' => 'not json at all'], $manifest);
+
+        $this->assertStringNotContainsString('ld+json', $html);
+        $this->assertSame(0, $manifest['schema']);
+    }
+
     public function testReplaceMetaTagsSkipsStructuredDataWhenScriptAlreadyPresent(): void
     {
         $manifest = $this->emptyManifest();
@@ -291,6 +312,15 @@ final class TransformerTest extends TestCase
         $this->assertStringContainsString('<a href="/toushin" data-seojuice-cs="777">投資信託</a>', $out);
     }
 
+    public function testLinksJapaneseKeywordFollowedBySentenceFinalPunctuation(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['suggestions' => [['keyword' => '投資信託', 'url' => '/toushin', 'id' => 777]], 'isAsian' => true, 'custom_link_class' => ''];
+        $out = Transformer::injectInternalLinks('<p>私は投資信託。詳しく学びます。</p>', $data, $manifest);
+
+        $this->assertSame('<p>私は<a href="/toushin" data-seojuice-cs="777">投資信託</a>。詳しく学びます。</p>', $out);
+    }
+
     public function testApplyContentDiffsAppliesUniqueDiffWithMarker(): void
     {
         $manifest = $this->emptyManifest();
@@ -328,6 +358,37 @@ final class TransformerTest extends TestCase
         $html = Transformer::applyContentDiffs('<div><p>new</p></div>', $diffs, $manifest);
 
         $this->assertSame('<div><p>new</p></div>', $html);
+        $this->assertSame([], $manifest['cs']);
+    }
+
+    public function testApplyContentDiffsIgnoresScriptDuplicateAndAppliesToBodyOnly(): void
+    {
+        // Next.js App Router-style hydration script duplicates the original
+        // pre-transform text; it must not block the visible-body diff (bug C).
+        $manifest = $this->emptyManifest();
+        $diffs = [['id' => 21, 'original_text' => 'Old paragraph text.', 'replacement_html' => '<strong>New paragraph text.</strong>']];
+        $html = Transformer::applyContentDiffs(
+            '<body><p>Old paragraph text.</p><script>window.__d="Old paragraph text.";</script></body>',
+            $diffs,
+            $manifest,
+        );
+
+        $this->assertSame(
+            '<body><p><strong data-seojuice-cs="21">New paragraph text.</strong></p><script>window.__d="Old paragraph text.";</script></body>',
+            $html,
+        );
+        $this->assertSame([21], $manifest['cs']);
+    }
+
+    public function testApplyContentDiffsStillSkipsWhenTwoVisibleOccurrences(): void
+    {
+        // Masking only clears script/style — two occurrences in the visible
+        // body must still trip the ambiguity guard.
+        $manifest = $this->emptyManifest();
+        $diffs = [['id' => 1, 'original_text' => 'dup', 'replacement_html' => 'X']];
+        $html = Transformer::applyContentDiffs('<p>dup</p><p>dup</p>', $diffs, $manifest);
+
+        $this->assertSame('<p>dup</p><p>dup</p>', $html);
         $this->assertSame([], $manifest['cs']);
     }
 
