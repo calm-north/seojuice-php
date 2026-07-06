@@ -68,18 +68,12 @@ class SeoInjectionObserver implements ObserverInterface
 
         $url = $this->urlBuilder->getCurrentUrl();
 
-        try {
-            $suggestions = $this->client->smart()->suggestions($url);
-        } catch (\Exception) {
-            return;
-        }
-
-        if ($suggestions->isEmpty()) {
-            return;
-        }
+        // suggestions() is fail-open — it returns [] on any network/parse error,
+        // and inject() is a no-op on an empty/invalid payload.
+        $data = $this->client->smart()->suggestions($url);
 
         $injector = new SeoInjector();
-        $this->response->setBody($injector->inject($body, $suggestions));
+        $this->response->setBody($injector->inject($body, $data));
     }
 }
 

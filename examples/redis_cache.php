@@ -16,7 +16,6 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Predis\Client as Redis;
 use SEOJuice\Injection\SeoInjector;
-use SEOJuice\Injection\Suggestions;
 use SEOJuice\SEOJuice;
 
 class SeoRedisCache
@@ -79,31 +78,18 @@ function main(): void
     $cache = new SeoRedisCache(new Redis(getenv('REDIS_URL') ?: 'tcp://127.0.0.1:6379'));
     $url = 'https://example.com/blog/seo-guide';
 
-    // Cache-aside pattern
+    // Cache-aside pattern — the /suggestions payload is already a plain array,
+    // so it round-trips through Redis (json_encode/json_decode) unchanged.
     $data = $cache->getCachedSuggestions($url);
 
     if ($data === null) {
-        $suggestions = $client->smart()->suggestions($url);
-        // Store the raw arrays for caching
-        $data = [
-            'links' => $suggestions->links,
-            'images' => $suggestions->images,
-            'meta_tags' => $suggestions->metaTags,
-            'structured_data' => $suggestions->structuredData,
-            'accessibility_fixes' => $suggestions->accessibilityFixes,
-            'og_tags' => $suggestions->ogTags,
-        ];
+        $data = $client->smart()->suggestions($url); // returns [] on any failure
         $cache->cacheSuggestions($url, $data);
     }
 
-    // Reconstruct typed Suggestions from cached data
-    $suggestions = Suggestions::fromArray($data);
-
-    if (!$suggestions->isEmpty()) {
-        $html = '<html><head><title>My Page</title></head><body>Hello</body></html>';
-        $injector = new SeoInjector();
-        echo $injector->inject($html, $suggestions);
-    }
+    $html = '<html><head><title>My Page</title></head><body>Hello</body></html>';
+    $injector = new SeoInjector();
+    echo $injector->inject($html, $data); // no-op on empty/invalid $data
 }
 
 main();

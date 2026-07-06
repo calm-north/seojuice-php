@@ -49,17 +49,18 @@ function seojuice_page_attachments_alter(array &$attachments): void
     $client = \Drupal::service('seojuice.client');
     $url = \Drupal::request()->getUri();
 
-    try {
-        $suggestions = $client->smart()->suggestions($url);
-    } catch (\Exception) {
-        return; // fail-open
-    }
+    // suggestions() is fail-open — it returns [] on any network/parse error.
+    $data = $client->smart()->suggestions($url);
 
-    if ($suggestions->isEmpty()) {
-        return;
-    }
+    $metaTags = [
+        'description' => $data['meta_description'] ?? '',
+        'keywords' => $data['meta_keywords'] ?? '',
+        'og:title' => $data['og_title'] ?? '',
+        'og:description' => $data['og_description'] ?? '',
+        'og:image' => $data['og_image'] ?? '',
+    ];
 
-    foreach ($suggestions->metaTags as $name => $content) {
+    foreach ($metaTags as $name => $content) {
         if ($content === '' || $content === null) {
             continue;
         }
@@ -67,9 +68,11 @@ function seojuice_page_attachments_alter(array &$attachments): void
         $attachments['#attached']['html_head'][] = [
             [
                 '#tag' => 'meta',
-                '#attributes' => ['name' => $name, 'content' => $content],
+                '#attributes' => str_starts_with($name, 'og:')
+                    ? ['property' => $name, 'content' => $content]
+                    : ['name' => $name, 'content' => $content],
             ],
-            "seojuice_{$name}",
+            'seojuice_' . str_replace(':', '_', $name),
         ];
     }
 }

@@ -61,16 +61,19 @@ class SeoInjectionSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $url = $event->getRequest()->getUri();
-        $suggestions = $this->client->smart()->suggestions($url);
-
         $content = $response->getContent();
-        if ($suggestions->isEmpty() || $content === false) {
+        if ($content === false) {
             return;
         }
 
+        // suggestions() is fail-open — it returns [] on any network/parse error,
+        // and inject() is a no-op on an empty/invalid payload, so this is safe to
+        // call unconditionally without try/catch or an isEmpty() check.
+        $url = $event->getRequest()->getUri();
+        $data = $this->client->smart()->suggestions($url);
+
         $injector = new SeoInjector();
-        $response->setContent($injector->inject($content, $suggestions));
+        $response->setContent($injector->inject($content, $data));
     }
 }
 

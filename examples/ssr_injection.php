@@ -6,6 +6,10 @@
  * Demonstrates plain PHP output buffering, a PSR-15 middleware,
  * and a simple in-memory TTL cache for suggestion data.
  *
+ * SeoInjector::inject() is stateless and fail-open: it always returns valid
+ * HTML — on a malformed/empty API response, an exception, or an unexpectedly
+ * short result, it returns the original HTML untouched.
+ *
  * Requirements:
  *     composer require seojuice/seojuice
  *
@@ -22,21 +26,23 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use SEOJuice\Injection\SeoInjector;
-use SEOJuice\Injection\Suggestions;
 use SEOJuice\SEOJuice;
 
 // ---------------------------------------------------------------------------
-// 1. Simple TTL cache for suggestions
+// 1. Simple TTL cache for the raw /suggestions payload
 // ---------------------------------------------------------------------------
 
 class SuggestionsCache
 {
     private const TTL = 300; // 5 minutes
 
-    /** @var array<string, array{data: Suggestions, expires: float}> */
+    /** @var array<string, array{data: array<string, mixed>, expires: float}> */
     private static array $store = [];
 
-    public static function get(string $url): ?Suggestions
+    /**
+     * @return array<string, mixed>|null
+     */
+    public static function get(string $url): ?array
     {
         $entry = self::$store[$url] ?? null;
         if ($entry === null || $entry['expires'] < microtime(true)) {
@@ -46,10 +52,13 @@ class SuggestionsCache
         return $entry['data'];
     }
 
-    public static function set(string $url, Suggestions $suggestions): void
+    /**
+     * @param array<string, mixed> $data
+     */
+    public static function set(string $url, array $data): void
     {
         self::$store[$url] = [
-            'data' => $suggestions,
+            'data' => $data,
             'expires' => microtime(true) + self::TTL,
         ];
     }
@@ -74,25 +83,16 @@ function renderWithSeo(string $url, callable $render): string
         return '';
     }
 
-    $suggestions = SuggestionsCache::get($url);
+    $data = SuggestionsCache::get($url);
 
-    if ($suggestions === null) {
+    if ($data === null) {
         $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
-
-        try {
-            $suggestions = $client->smart()->suggestions($url);
-            SuggestionsCache::set($url, $suggestions);
-        } catch (\Exception) {
-            return $html; // fail-open
-        }
-    }
-
-    if ($suggestions->isEmpty()) {
-        return $html;
+        $data = $client->smart()->suggestions($url); // returns [] on any failure
+        SuggestionsCache::set($url, $data);
     }
 
     $injector = new SeoInjector();
-    return $injector->inject($html, $suggestions);
+    return $injector->inject($html, $data); // no-op on empty/invalid $data
 }
 
 // ---------------------------------------------------------------------------
@@ -115,24 +115,16 @@ class SeoInjectionMiddleware implements MiddlewareInterface
         }
 
         $url = (string) $request->getUri();
-        $suggestions = SuggestionsCache::get($url);
+        $data = SuggestionsCache::get($url);
 
-        if ($suggestions === null) {
-            try {
-                $suggestions = $this->client->smart()->suggestions($url);
-                SuggestionsCache::set($url, $suggestions);
-            } catch (\Exception) {
-                return $response; // fail-open
-            }
-        }
-
-        if ($suggestions->isEmpty()) {
-            return $response;
+        if ($data === null) {
+            $data = $this->client->smart()->suggestions($url); // returns [] on any failure
+            SuggestionsCache::set($url, $data);
         }
 
         $injector = new SeoInjector();
         $body = (string) $response->getBody();
-        $modified = $injector->inject($body, $suggestions);
+        $modified = $injector->inject($body, $data); // no-op on empty/invalid $data
 
         $stream = \GuzzleHttp\Psr7\Utils::streamFor($modified);
         return $response->withBody($stream);

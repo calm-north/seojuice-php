@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.2.0 (2026-07-06)
+
+### Breaking Changes
+
+- **`SeoInjector::inject(string $html, Suggestions $suggestions)` → `inject(string $html, array $data): string`.**
+  The injector now takes the raw `/suggestions` API payload directly instead of
+  a `Suggestions` object.
+- **`SmartClient::suggestions(string $url): Suggestions` → `suggestions(string $url): array`.**
+  Returns the decoded payload array directly; any network/parse failure now
+  returns `[]` instead of throwing `SEOJuiceException`.
+- **Why:** the previous `Suggestions::fromArray()` read fictional keys
+  (`links`, `meta_tags`, `og_tags`, `structured_data` typed as an array) that
+  the backend never sends. Every real `/suggestions` response — which sends
+  `structured_data` as a JSON-encoded **string** — threw a `TypeError` in the
+  constructor, so server-side injection crashed on every request. `Suggestions`
+  is rewritten to the real payload shape and remains available as an optional
+  typed convenience wrapper (`fromArray()` / `toArray()` / `isEmpty()`), but is
+  no longer part of the `SeoInjector`/`SmartClient` call path.
+
+### Server-Side Injection Parity
+
+Full parity with the Cloudflare Worker (`seojuice-ssr.js`) and the WordPress
+plugin's stateless injection path:
+
+- **`src/Injection/Transformer.php`** (new) — all transforms ported as pure
+  static methods: `replaceMetaTags` (title/description/keywords/OG tags +
+  double-decoded `structured_data` → JSON-LD), `replaceImages` (alt-text fill
+  on missing/`<5`-char alt), `injectInternalLinks` (first-occurrence keyword
+  linking; Latin and CJK — `\p{Han}`/`\p{Hiragana}`/`\p{Katakana}` — keyword
+  boundaries via native PCRE lookbehind), `applyContentDiffs` (replace-only,
+  drift/ambiguity/idempotency guards), `applyBrokenLinkFixes` (`replace`/`unlink`,
+  reads `new_url ?: replacement_url`), `replaceH1`, `addManifestComment`,
+  `addSsrFlag`.
+- **`validateApiResponse()` (C1)** — rejects a malformed/empty API response
+  (errors present, wrong-typed `suggestions`/`images`/`diffs`/`broken_link_fixes`,
+  or nothing actionable) before any transform runs.
+- **Content-area targeting (C2)** — `insert_into_content_only` restricts link
+  injection to the direct text of `p|li|span|div|td|blockquote|dd|figcaption`,
+  never headings/nav/chrome.
+- **Fail-open** — any exception, empty result, `<0.5×` original length, or a
+  missing `<body>` reverts to the original HTML untouched.
+- **Idempotent** via `data-seojuice*` markers; safe to run on an already-injected
+  page.
+- Verified against the shared Worker-generated golden vectors
+  (`tests/fixtures/ssr-parity-vectors/`, `tests/Injection/ParityVectorsTest.php`).
+
 ## 1.1.0 (2026-03-13)
 
 ### New Features

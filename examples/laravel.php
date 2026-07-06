@@ -78,13 +78,13 @@ class SeoInjectionMiddleware
             return $response;
         }
 
-        $suggestions = $this->client->smart()->suggestions($request->url());
-        if ($suggestions->isEmpty()) {
-            return $response;
-        }
+        // suggestions() is fail-open — it returns [] on any network/parse error,
+        // and inject() is a no-op on an empty/invalid payload, so this is safe to
+        // call unconditionally without try/catch or an isEmpty() check.
+        $data = $this->client->smart()->suggestions($request->url());
 
         $injector = new SeoInjector();
-        $response->setContent($injector->inject($content, $suggestions));
+        $response->setContent($injector->inject($content, $data));
 
         return $response;
     }
