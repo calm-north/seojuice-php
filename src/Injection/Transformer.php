@@ -327,6 +327,61 @@ final class Transformer
         return implode('', $result);
     }
 
+    private const SINGLE_ROOT_RE = '/^<(\w+)(\s[^>]*)?>/';
+
+    /**
+     * @param array<int, array<string, mixed>> $diffs
+     * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest
+     */
+    public static function applyContentDiffs(string $html, array $diffs, array &$manifest): string
+    {
+        foreach ($diffs as $diff) {
+            try {
+                $original = (string) ($diff['original_text'] ?? '');
+                $replacement = (string) ($diff['replacement_html'] ?? '');
+
+                if ($original === '' || $replacement === '') {
+                    continue;
+                }
+
+                if (str_contains($html, $replacement) && !str_contains($html, $original)) {
+                    continue; // already applied
+                }
+
+                $idx = strpos($html, $original);
+                if ($idx === false) {
+                    continue; // DOM drift → skip
+                }
+
+                if (strpos($html, $original, $idx + 1) !== false) {
+                    continue; // ambiguous → skip
+                }
+
+                $id = $diff['id'] ?? null;
+                if ($id !== null) {
+                    if (preg_match(self::SINGLE_ROOT_RE, $replacement, $rootMatch)) {
+                        $markerStr = 'data-seojuice-cs="' . $id . '"';
+                        if (!str_contains($replacement, $markerStr)) {
+                            $openTag = $rootMatch[0];
+                            $markedOpenTag = substr($openTag, 0, -1) . ' ' . $markerStr . '>';
+                            $replacement = $markedOpenTag . substr($replacement, strlen($openTag));
+                        }
+
+                        if (!str_contains($html, 'data-seojuice-cs="' . $id . '"')) {
+                            $manifest['cs'][] = $id;
+                        }
+                    }
+                }
+
+                $html = substr($html, 0, $idx) . $replacement . substr($html, $idx + strlen($original));
+            } catch (\Throwable) {
+                // one bad diff never aborts the page
+            }
+        }
+
+        return $html;
+    }
+
     /**
      * @param array<string, mixed> $data
      * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest

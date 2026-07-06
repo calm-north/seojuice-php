@@ -254,4 +254,44 @@ final class TransformerTest extends TestCase
 
         $this->assertStringContainsString('<a href="/toushin" data-seojuice-cs="777">投資信託</a>', $out);
     }
+
+    public function testApplyContentDiffsAppliesUniqueDiffWithMarker(): void
+    {
+        $manifest = $this->emptyManifest();
+        $diffs = [['id' => 9, 'original_text' => '<p>old copy</p>', 'replacement_html' => '<p>new copy</p>']];
+        $html = Transformer::applyContentDiffs('<div><p>old copy</p></div>', $diffs, $manifest);
+
+        $this->assertSame('<div><p data-seojuice-cs="9">new copy</p></div>', $html);
+        $this->assertSame([9], $manifest['cs']);
+    }
+
+    public function testApplyContentDiffsSkipsAmbiguousMatch(): void
+    {
+        $manifest = $this->emptyManifest();
+        $diffs = [['id' => 1, 'original_text' => 'dup', 'replacement_html' => 'X']];
+        $html = Transformer::applyContentDiffs('<p>dup dup</p>', $diffs, $manifest);
+
+        $this->assertSame('<p>dup dup</p>', $html);
+        $this->assertSame([], $manifest['cs']);
+    }
+
+    public function testApplyContentDiffsSkipsWhenOriginalTextDrifted(): void
+    {
+        $manifest = $this->emptyManifest();
+        $diffs = [['id' => 1, 'original_text' => 'no longer here', 'replacement_html' => 'X']];
+        $html = Transformer::applyContentDiffs('<p>completely different content</p>', $diffs, $manifest);
+
+        $this->assertSame('<p>completely different content</p>', $html);
+        $this->assertSame([], $manifest['cs']);
+    }
+
+    public function testApplyContentDiffsIsIdempotentWhenAlreadyApplied(): void
+    {
+        $manifest = $this->emptyManifest();
+        $diffs = [['id' => 1, 'original_text' => '<p>old</p>', 'replacement_html' => '<p>new</p>']];
+        $html = Transformer::applyContentDiffs('<div><p>new</p></div>', $diffs, $manifest);
+
+        $this->assertSame('<div><p>new</p></div>', $html);
+        $this->assertSame([], $manifest['cs']);
+    }
 }
