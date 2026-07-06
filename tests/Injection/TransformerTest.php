@@ -140,4 +140,53 @@ final class TransformerTest extends TestCase
         $this->assertSame('<h1>Old</h1>', $html);
         $this->assertSame(0, $manifest['h1']);
     }
+
+    public function testReplaceImagesFillsEmptyAltByNormalizedUrl(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['images' => [['url' => 'https://x.com/a.png', 'alt_text' => 'A lovely photo']]];
+        $html = Transformer::replaceImages('<img src="//x.com/a.png" alt="">', $data, $manifest);
+
+        $this->assertSame('<img data-seojuice="alt" src="//x.com/a.png" alt="A lovely photo">', $html);
+        $this->assertSame(1, $manifest['img']);
+    }
+
+    public function testReplaceImagesKeepsGoodExistingAlt(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['images' => [['url' => 'https://x.com/a.png', 'alt_text' => 'Replacement text']]];
+        $html = Transformer::replaceImages('<img src="//x.com/a.png" alt="A perfectly fine description">', $data, $manifest);
+
+        $this->assertSame('<img src="//x.com/a.png" alt="A perfectly fine description">', $html);
+        $this->assertSame(0, $manifest['img']);
+    }
+
+    public function testReplaceImagesReplacesShortAlt(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['images' => [['url' => 'https://x.com/a.png', 'alt_text' => 'Good alt text']]];
+        $html = Transformer::replaceImages('<img src="//x.com/a.png" alt="hi">', $data, $manifest);
+
+        $this->assertSame('<img data-seojuice="alt" src="//x.com/a.png" alt="Good alt text">', $html);
+        $this->assertSame(1, $manifest['img']);
+    }
+
+    public function testReplaceImagesAddsAltWhenAttributeMissing(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['images' => [['url' => 'https://x.com/a.png', 'alt_text' => 'Good alt text']]];
+        $html = Transformer::replaceImages('<img src="//x.com/a.png">', $data, $manifest);
+
+        $this->assertSame('<img alt="Good alt text" data-seojuice="alt" src="//x.com/a.png">', $html);
+        $this->assertSame(1, $manifest['img']);
+    }
+
+    public function testReplaceImagesReturnsUnchangedWhenNoImagesData(): void
+    {
+        $manifest = $this->emptyManifest();
+        $html = Transformer::replaceImages('<img src="//x.com/a.png">', [], $manifest);
+
+        $this->assertSame('<img src="//x.com/a.png">', $html);
+        $this->assertSame(0, $manifest['img']);
+    }
 }

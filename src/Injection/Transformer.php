@@ -159,6 +159,74 @@ final class Transformer
      * @param array<string, mixed> $data
      * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest
      */
+    public static function replaceImages(string $html, array $data, array &$manifest): string
+    {
+        $images = $data['images'] ?? null;
+
+        if (!is_array($images)) {
+            return $html;
+        }
+
+        $imageMap = [];
+        foreach ($images as $image) {
+            $url = (string) ($image['url'] ?? '');
+            $altText = (string) ($image['alt_text'] ?? '');
+
+            if ($url !== '' && $altText !== '') {
+                $imageMap[self::normalizeImageUrl($url)] = $altText;
+            }
+        }
+
+        if ($imageMap === []) {
+            return $html;
+        }
+
+        return (string) preg_replace_callback(
+            '/<img([^>]+)>/i',
+            static function (array $matches) use ($imageMap, &$manifest): string {
+                $match = $matches[0];
+                $attributes = $matches[1];
+
+                if (!preg_match('/(?:src|data-src)=["\']([^"\']+)["\']/', $attributes, $srcMatch)) {
+                    return $match;
+                }
+
+                $normalizedSrc = self::normalizeImageUrl($srcMatch[1]);
+
+                if (!isset($imageMap[$normalizedSrc])) {
+                    return $match;
+                }
+
+                $altMatch = [];
+                $hasAlt = (bool) preg_match('/alt=["\']([^"\']*)["\']/', $match, $altMatch);
+                $existingAlt = $hasAlt ? $altMatch[1] : '';
+
+                if ($existingAlt !== '' && mb_strlen($existingAlt) >= 5) {
+                    return $match;
+                }
+
+                $altText = self::escapeHtml($imageMap[$normalizedSrc]);
+                $manifest['img']++;
+
+                if ($hasAlt) {
+                    $replaced = (string) preg_replace('/alt=["\'][^"\']*["\']/', 'alt="' . $altText . '"', $match, 1);
+                    if (!str_contains($replaced, 'data-seojuice=')) {
+                        $replaced = (string) preg_replace('/<img/', '<img data-seojuice="alt"', $replaced, 1);
+                    }
+
+                    return $replaced;
+                }
+
+                return (string) preg_replace('/<img/', '<img alt="' . $altText . '" data-seojuice="alt"', $match, 1);
+            },
+            $html,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest
+     */
     public static function replaceH1(string $html, array $data, array &$manifest): string
     {
         $h1 = (string) ($data['h1'] ?? '');
