@@ -227,6 +227,110 @@ final class Transformer
      * @param array<string, mixed> $data
      * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest
      */
+    public static function injectInternalLinks(string $html, array $data, array &$manifest): string
+    {
+        $suggestions = $data['suggestions'] ?? null;
+
+        if (!is_array($suggestions)) {
+            return $html;
+        }
+
+        $isAsian = (bool) ($data['isAsian'] ?? false);
+        $customLinkClass = (string) ($data['custom_link_class'] ?? '');
+
+        $links = [];
+        $seenKeywords = [];
+        foreach ($suggestions as $suggestion) {
+            $keyword = (string) ($suggestion['keyword'] ?? '');
+            $url = (string) ($suggestion['url'] ?? '');
+
+            if ($keyword === '' || $url === '') {
+                continue;
+            }
+
+            $kl = mb_strtolower($keyword, 'UTF-8');
+
+            if (isset($seenKeywords[$kl])) {
+                continue;
+            }
+            $seenKeywords[$kl] = true;
+
+            $escapedKeyword = preg_quote($keyword, '/');
+            $pattern = $isAsian
+                ? '/(?<=[\p{Han}\p{Hiragana}\p{Katakana}]|^)(' . $escapedKeyword . ')(?=[\p{Han}\p{Hiragana}\p{Katakana}.!?)\]\/]|$)/u'
+                : '/(?<=^|\s|[([{<>"\'«‹„"\'|\/]|\-|:)(' . $escapedKeyword . ')(?=$|\s|[)\]}>"\'»›"\'|\/]|\-|[.,:;!?])/i';
+
+            $links[] = [
+                'keyword' => $keyword,
+                'kl' => $kl,
+                'url' => $url,
+                'id' => $suggestion['id'] ?? null,
+                'pattern' => $pattern,
+            ];
+        }
+
+        if ($links === []) {
+            return $html;
+        }
+
+        $replacedKeywords = [];
+        $segments = self::tokenizeHtml($html);
+        $skipDepth = 0;
+        $result = [];
+
+        foreach ($segments as $segment) {
+            if ($segment['type'] === 'tag') {
+                if (preg_match(self::SKIP_TAG_RE, $segment['value'])) {
+                    $skipDepth++;
+                } elseif ($skipDepth > 0 && preg_match(self::CLOSE_TAG_RE, $segment['value'])) {
+                    $skipDepth--;
+                }
+                $result[] = $segment['value'];
+                continue;
+            }
+
+            $text = $segment['value'];
+
+            if ($skipDepth === 0) {
+                foreach ($links as $link) {
+                    if (isset($replacedKeywords[$link['kl']])) {
+                        continue;
+                    }
+
+                    $text = (string) preg_replace_callback(
+                        $link['pattern'],
+                        static function (array $matches) use ($link, $customLinkClass, &$replacedKeywords, &$manifest): string {
+                            if (isset($replacedKeywords[$link['kl']])) {
+                                return $matches[0];
+                            }
+
+                            $classAttr = $customLinkClass !== '' ? ' class="seojuice-link ' . $customLinkClass . '"' : '';
+                            $csAttr = $link['id'] !== null ? ' data-seojuice-cs="' . $link['id'] . '"' : '';
+                            $replacement = '<a href="' . self::escapeHtml($link['url']) . '"' . $classAttr . $csAttr . '>' . self::escapeHtml($link['keyword']) . '</a>';
+
+                            $replacedKeywords[$link['kl']] = true;
+                            if ($link['id'] !== null) {
+                                $manifest['cs'][] = $link['id'];
+                            }
+
+                            return $replacement;
+                        },
+                        $text,
+                        1,
+                    );
+                }
+            }
+
+            $result[] = $text;
+        }
+
+        return implode('', $result);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest
+     */
     public static function replaceH1(string $html, array $data, array &$manifest): string
     {
         $h1 = (string) ($data['h1'] ?? '');

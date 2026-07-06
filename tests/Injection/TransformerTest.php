@@ -189,4 +189,69 @@ final class TransformerTest extends TestCase
         $this->assertSame('<img src="//x.com/a.png">', $html);
         $this->assertSame(0, $manifest['img']);
     }
+
+    public function testInjectInternalLinksFirstOccurrenceOnlyWithCsMarker(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = [
+            'suggestions' => [['keyword' => 'widget', 'url' => '/widgets', 'id' => 42]],
+            'custom_link_class' => '',
+        ];
+        $out = Transformer::injectInternalLinks('<p>Buy a widget. Another widget is here.</p>', $data, $manifest);
+
+        $this->assertSame(
+            '<p>Buy a <a href="/widgets" data-seojuice-cs="42">widget</a>. Another widget is here.</p>',
+            $out,
+        );
+        $this->assertSame([42], $manifest['cs']);
+    }
+
+    public function testInjectInternalLinksNeverInsideAnchorOrHeading(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = [
+            'suggestions' => [['keyword' => 'widget', 'url' => '/widgets', 'id' => 1]],
+            'custom_link_class' => '',
+        ];
+        $out = Transformer::injectInternalLinks(
+            '<h1>widget</h1><a href="/x">widget</a><p>widget</p>',
+            $data,
+            $manifest,
+        );
+
+        $this->assertSame(
+            '<h1>widget</h1><a href="/x">widget</a><p><a href="/widgets" data-seojuice-cs="1">widget</a></p>',
+            $out,
+        );
+    }
+
+    public function testInjectInternalLinksAppliesCustomLinkClass(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = [
+            'suggestions' => [['keyword' => 'widget', 'url' => '/widgets', 'id' => 1]],
+            'custom_link_class' => 'my-cls',
+        ];
+        $out = Transformer::injectInternalLinks('<p>widget</p>', $data, $manifest);
+
+        $this->assertSame('<p><a href="/widgets" class="seojuice-link my-cls" data-seojuice-cs="1">widget</a></p>', $out);
+    }
+
+    public function testLinksChineseKeywordBetweenCjkChars(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['suggestions' => [['keyword' => '投资基金', 'url' => '/funds', 'id' => 501]], 'isAsian' => true, 'custom_link_class' => ''];
+        $out = Transformer::injectInternalLinks('<p>我想了解投资基金的收益。</p>', $data, $manifest);
+
+        $this->assertSame('<p>我想了解<a href="/funds" data-seojuice-cs="501">投资基金</a>的收益。</p>', $out);
+    }
+
+    public function testLinksJapaneseKeyword(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = ['suggestions' => [['keyword' => '投資信託', 'url' => '/toushin', 'id' => 777]], 'isAsian' => true, 'custom_link_class' => ''];
+        $out = Transformer::injectInternalLinks('<p>私は投資信託を学ぶ。</p>', $data, $manifest);
+
+        $this->assertStringContainsString('<a href="/toushin" data-seojuice-cs="777">投資信託</a>', $out);
+    }
 }
