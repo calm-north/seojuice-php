@@ -5,17 +5,15 @@ declare(strict_types=1);
 namespace SEOJuice\Tests\Injection;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
-use GuzzleHttp\Exception\ConnectException;
 use PHPUnit\Framework\TestCase;
 use SEOJuice\Config;
-use SEOJuice\Exceptions\SEOJuiceException;
 use SEOJuice\Injection\SmartClient;
-use SEOJuice\Injection\Suggestions;
 
 final class SmartClientTest extends TestCase
 {
@@ -34,16 +32,9 @@ final class SmartClientTest extends TestCase
         return new SmartClient($config, $guzzleClient);
     }
 
-    public function testSuggestionsReturnsSuggestionsObject(): void
+    public function testSuggestionsReturnsRawPayloadArray(): void
     {
-        $responseData = [
-            'links' => [],
-            'images' => [],
-            'meta_tags' => ['title' => 'Test'],
-            'structured_data' => [],
-            'accessibility_fixes' => [],
-            'og_tags' => [],
-        ];
+        $responseData = ['title' => 'Test', 'suggestions' => []];
 
         $mock = new MockHandler([
             new Response(200, [], json_encode($responseData)),
@@ -52,21 +43,14 @@ final class SmartClientTest extends TestCase
         $client = $this->createSmartClient($mock);
         $result = $client->suggestions('https://example.com/page');
 
-        $this->assertInstanceOf(Suggestions::class, $result);
-        $this->assertSame('Test', $result->metaTags['title']);
+        $this->assertIsArray($result);
+        $this->assertSame('Test', $result['title']);
     }
 
     public function testSuggestionsSendsUrlAsQueryParam(): void
     {
         $mock = new MockHandler([
-            new Response(200, [], json_encode([
-                'links' => [],
-                'images' => [],
-                'meta_tags' => [],
-                'structured_data' => [],
-                'accessibility_fixes' => [],
-                'og_tags' => [],
-            ])),
+            new Response(200, [], json_encode(['title' => ''])),
         ]);
 
         $client = $this->createSmartClient($mock);
@@ -80,7 +64,7 @@ final class SmartClientTest extends TestCase
         $this->assertStringContainsString('example.com', (string) $request->getUri());
     }
 
-    public function testSuggestionsThrowsSeoJuiceExceptionOnNetworkError(): void
+    public function testSuggestionsReturnsEmptyArrayOnNetworkError(): void
     {
         $mock = new MockHandler([
             new ConnectException(
@@ -91,40 +75,29 @@ final class SmartClientTest extends TestCase
 
         $client = $this->createSmartClient($mock);
 
-        $this->expectException(SEOJuiceException::class);
-        $this->expectExceptionMessageMatches('/Failed to fetch suggestions/');
-
-        $client->suggestions('https://example.com');
+        $this->assertSame([], $client->suggestions('https://example.com'));
     }
 
-    public function testSuggestionsExceptionHasSmartClientErrorCode(): void
+    public function testSuggestionsReturnsEmptyArrayOnInvalidJson(): void
     {
         $mock = new MockHandler([
-            new ConnectException(
-                'Timeout',
-                new Request('GET', 'https://smart.test.io/suggestions'),
-            ),
+            new Response(200, [], 'not json'),
         ]);
 
         $client = $this->createSmartClient($mock);
 
-        try {
-            $client->suggestions('https://example.com');
-            $this->fail('Expected SEOJuiceException');
-        } catch (SEOJuiceException $e) {
-            $this->assertSame('smart_client_error', $e->errorCode);
-        }
+        $this->assertSame([], $client->suggestions('https://example.com'));
     }
 
     public function testSuggestionsHandlesFullResponseData(): void
     {
         $responseData = [
-            'links' => [['href' => '/about', 'anchor' => 'About']],
-            'images' => [['src' => '/img.jpg', 'alt' => 'Test']],
-            'meta_tags' => ['title' => 'Page Title', 'description' => 'Desc'],
-            'structured_data' => [['@type' => 'WebSite']],
-            'accessibility_fixes' => [['type' => 'aria']],
-            'og_tags' => ['title' => 'OG Title'],
+            'suggestions' => [['keyword' => 'about', 'url' => '/about', 'id' => 1]],
+            'images' => [['url' => '/img.jpg', 'alt_text' => 'Test']],
+            'title' => 'Page Title',
+            'meta_description' => 'Desc',
+            'structured_data' => json_encode(json_encode(['@type' => 'WebSite'])),
+            'og_title' => 'OG Title',
         ];
 
         $mock = new MockHandler([
@@ -134,12 +107,9 @@ final class SmartClientTest extends TestCase
         $client = $this->createSmartClient($mock);
         $result = $client->suggestions('https://example.com');
 
-        $this->assertFalse($result->isEmpty());
-        $this->assertCount(1, $result->links);
-        $this->assertCount(1, $result->images);
-        $this->assertCount(1, $result->structuredData);
-        $this->assertCount(1, $result->accessibilityFixes);
-        $this->assertSame('Page Title', $result->metaTags['title']);
-        $this->assertSame('OG Title', $result->ogTags['title']);
+        $this->assertCount(1, $result['suggestions']);
+        $this->assertCount(1, $result['images']);
+        $this->assertSame('Page Title', $result['title']);
+        $this->assertSame('OG Title', $result['og_title']);
     }
 }

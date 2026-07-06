@@ -329,4 +329,121 @@ final class TransformerTest extends TestCase
 
         $this->assertSame('<a data-href="/dead" href="/live">link</a>', $html);
     }
+
+    public function testValidateApiResponseRejectsWhenErrorsPresent(): void
+    {
+        $this->assertFalse(Transformer::validateApiResponse(['title' => 'T', 'errors' => ['boom']]));
+    }
+
+    public function testValidateApiResponseRejectsWhenNoActionableField(): void
+    {
+        $this->assertFalse(Transformer::validateApiResponse(['errors' => []]));
+    }
+
+    public function testValidateApiResponseAcceptsWhenTitlePresent(): void
+    {
+        $this->assertTrue(Transformer::validateApiResponse(['title' => 'T']));
+    }
+
+    public function testValidateApiResponseAcceptsWhenOnlyDiffsPresent(): void
+    {
+        $this->assertTrue(Transformer::validateApiResponse(['diffs' => [['original_text' => 'a', 'replacement_html' => 'b']]]));
+    }
+
+    public function testValidateApiResponseRejectsWhenSuggestionsNotArray(): void
+    {
+        $this->assertFalse(Transformer::validateApiResponse(['title' => 'T', 'suggestions' => 'nope']));
+    }
+
+    public function testValidateApiResponseRejectsWhenImagesNotArray(): void
+    {
+        $this->assertFalse(Transformer::validateApiResponse(['title' => 'T', 'images' => 'nope']));
+    }
+
+    public function testValidateApiResponseRejectsWhenDiffsNotArray(): void
+    {
+        $this->assertFalse(Transformer::validateApiResponse(['title' => 'T', 'diffs' => 'nope']));
+    }
+
+    public function testValidateApiResponseAcceptsWhenOnlyBrokenLinkFixesPresent(): void
+    {
+        $this->assertTrue(Transformer::validateApiResponse([
+            'broken_link_fixes' => [['tag' => 'a', 'attr' => 'href', 'broken_url' => '/dead', 'new_url' => '/live']],
+        ]));
+    }
+
+    public function testValidateApiResponseRejectsWhenBrokenLinkFixesNotArray(): void
+    {
+        $this->assertFalse(Transformer::validateApiResponse(['title' => 'T', 'broken_link_fixes' => 'nope']));
+    }
+
+    public function testValidateApiResponseAcceptsWhenOnlyH1Present(): void
+    {
+        $this->assertTrue(Transformer::validateApiResponse(['h1' => 'New Heading']));
+    }
+
+    public function testInjectInternalLinksContentAreaLinksInsideParagraphNotNav(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = [
+            'suggestions' => [['keyword' => 'widget', 'url' => '/widgets', 'id' => 1]],
+            'custom_link_class' => '',
+            'insert_into_content_only' => true,
+        ];
+        $out = Transformer::injectInternalLinks('<nav>widget</nav><p>widget</p>', $data, $manifest);
+
+        $this->assertSame('<nav>widget</nav><p><a href="/widgets" data-seojuice-cs="1">widget</a></p>', $out);
+    }
+
+    public function testInjectInternalLinksContentAreaAllowsListAndSpanTags(): void
+    {
+        $manifest = $this->emptyManifest();
+        $data = [
+            'suggestions' => [['keyword' => 'widget', 'url' => '/widgets', 'id' => 1]],
+            'custom_link_class' => '',
+            'insert_into_content_only' => true,
+        ];
+        $out = Transformer::injectInternalLinks('<ul><li>widget</li></ul>', $data, $manifest);
+
+        $this->assertSame('<ul><li><a href="/widgets" data-seojuice-cs="1">widget</a></li></ul>', $out);
+    }
+
+    public function testAddManifestCommentAddsCombinedMutations(): void
+    {
+        $manifest = ['cs' => [1, 2], 'meta' => ['title'], 'img' => 2, 'schema' => 1, 'h1' => 1];
+        $html = Transformer::addManifestComment('<body></body>', $manifest);
+
+        $this->assertSame('<body><!-- seojuice: cs=[1,2] meta=[title] img=2 schema=1 h1=1 -->' . "\n</body>", $html);
+    }
+
+    public function testAddManifestCommentIsIdempotent(): void
+    {
+        $manifest = ['cs' => [1], 'meta' => [], 'img' => 0, 'schema' => 0, 'h1' => 0];
+        $html = Transformer::addManifestComment('<!-- seojuice: cs=[1] --><body></body>', $manifest);
+
+        $this->assertSame('<!-- seojuice: cs=[1] --><body></body>', $html);
+    }
+
+    public function testAddManifestCommentSkipsWhenNothingChanged(): void
+    {
+        $manifest = $this->emptyManifest();
+        $html = Transformer::addManifestComment('<body></body>', $manifest);
+
+        $this->assertSame('<body></body>', $html);
+    }
+
+    public function testAddSsrFlagAddsScriptOnce(): void
+    {
+        $html = Transformer::addSsrFlag('<body></body>');
+
+        $this->assertSame("<body><script>window.seojuiceSSR = true;</script>\n</body>", $html);
+    }
+
+    public function testAddSsrFlagIsIdempotent(): void
+    {
+        $existing = '<script>window.seojuiceSSR = true;</script><body></body>';
+        $html = Transformer::addSsrFlag($existing);
+
+        $this->assertSame($existing, $html);
+    }
 }

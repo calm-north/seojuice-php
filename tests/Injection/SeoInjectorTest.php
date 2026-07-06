@@ -6,7 +6,6 @@ namespace SEOJuice\Tests\Injection;
 
 use PHPUnit\Framework\TestCase;
 use SEOJuice\Injection\SeoInjector;
-use SEOJuice\Injection\Suggestions;
 
 final class SeoInjectorTest extends TestCase
 {
@@ -17,603 +16,159 @@ final class SeoInjectorTest extends TestCase
         $this->injector = new SeoInjector();
     }
 
-    private function makeHtml(string $headContent = '', string $bodyContent = ''): string
+    private function makeHtml(string $headContent = '', string $bodyContent = 'Body content long enough to survive the fail-open length-ratio check comfortably.'): string
     {
         return "<html><head>{$headContent}</head><body>{$bodyContent}</body></html>";
     }
 
-    private function emptySuggestions(): Suggestions
+    public function testInjectReturnsUnchangedHtmlWhenValidationFails(): void
     {
-        return new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-    }
+        $html = $this->makeHtml();
 
-    // --- inject() returns unchanged HTML for empty suggestions ---
-
-    public function testInjectReturnsUnchangedHtmlForEmptySuggestions(): void
-    {
-        $html = $this->makeHtml('', '<p>Hello</p>');
-        $suggestions = $this->emptySuggestions();
-
-        $result = $this->injector->inject($html, $suggestions);
+        $result = $this->injector->inject($html, ['errors' => ['boom']]);
 
         $this->assertSame($html, $result);
     }
 
-    // --- injectMetaTags ---
-
-    public function testInjectMetaTagsInjectsTitleBeforeCloseHead(): void
+    public function testInjectReturnsUnchangedHtmlWhenNothingActionable(): void
     {
         $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: ['title' => 'My Page Title'],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
 
-        $result = $this->injector->inject($html, $suggestions);
+        $result = $this->injector->inject($html, []);
 
-        $this->assertStringContainsString('<title>My Page Title</title>', $result);
-        // Title should appear before </head>
-        $titlePos = strpos($result, '<title>');
-        $headClosePos = strpos($result, '</head>');
-        $this->assertNotFalse($titlePos);
-        $this->assertNotFalse($headClosePos);
-        $this->assertLessThan($headClosePos, $titlePos);
+        $this->assertSame($html, $result);
     }
 
-    public function testInjectMetaTagsInjectsDescriptionMetaTag(): void
+    public function testInjectAddsTitleAndMarksManifest(): void
     {
         $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: ['description' => 'A great page about SEO'],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
 
-        $result = $this->injector->inject($html, $suggestions);
+        $result = $this->injector->inject($html, ['title' => 'My Page Title']);
 
-        $this->assertStringContainsString(
-            '<meta name="description" content="A great page about SEO">',
-            $result,
-        );
+        $this->assertStringContainsString('<title data-seojuice="title">My Page Title</title>', $result);
+        $this->assertStringContainsString('<!-- seojuice: meta=[title] -->', $result);
     }
 
-    public function testInjectMetaTagsInjectsCanonicalLink(): void
+    public function testInjectEscapesSpecialCharactersInMeta(): void
     {
         $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: ['canonical' => 'https://example.com/page'],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
 
-        $result = $this->injector->inject($html, $suggestions);
+        $result = $this->injector->inject($html, ['title' => 'Page "Title" & <More>']);
 
-        $this->assertStringContainsString(
-            '<link rel="canonical" href="https://example.com/page">',
-            $result,
-        );
+        $this->assertStringContainsString('Page &quot;Title&quot; &amp; &lt;More&gt;', $result);
     }
 
-    public function testInjectMetaTagsInjectsRobotsMeta(): void
+    public function testInjectAppliesImageAlt(): void
+    {
+        $html = $this->makeHtml('', '<img src="/logo.png"> Body content long enough to survive fail-open.');
+
+        $result = $this->injector->inject($html, [
+            'images' => [['url' => '/logo.png', 'alt_text' => 'Company Logo']],
+        ]);
+
+        $this->assertStringContainsString('alt="Company Logo"', $result);
+    }
+
+    public function testInjectAddsInternalLinkWithCsMarker(): void
+    {
+        $html = $this->makeHtml('', '<p>Read our widget guide for details on widgets today.</p>');
+
+        $result = $this->injector->inject($html, [
+            'suggestions' => [['keyword' => 'widget', 'url' => '/widgets', 'id' => 7]],
+        ]);
+
+        $this->assertStringContainsString('<a href="/widgets" data-seojuice-cs="7">widget</a>', $result);
+        $this->assertStringContainsString('cs=[7]', $result);
+    }
+
+    public function testInjectAppliesContentDiff(): void
+    {
+        $html = $this->makeHtml('', '<div><p>old copy here that is long enough to pass fail-open</p></div>');
+
+        $result = $this->injector->inject($html, [
+            'diffs' => [[
+                'id' => 9,
+                'original_text' => '<p>old copy here that is long enough to pass fail-open</p>',
+                'replacement_html' => '<p>new premium copy here that is long enough to pass fail-open</p>',
+            ]],
+        ]);
+
+        $this->assertStringContainsString('new premium copy', $result);
+        $this->assertStringContainsString('data-seojuice-cs="9"', $result);
+    }
+
+    public function testInjectReplacesH1(): void
+    {
+        $html = $this->makeHtml('', '<h1>Old Heading</h1><p>Body content long enough to survive the fail-open ratio check.</p>');
+
+        $result = $this->injector->inject($html, ['h1' => 'New Heading']);
+
+        $this->assertStringContainsString('<h1 data-seojuice="h1">New Heading</h1>', $result);
+    }
+
+    public function testInjectAppliesBrokenLinkFix(): void
+    {
+        $html = $this->makeHtml('', '<p>See our <a href="/dead">guide</a> for more details on this topic.</p>');
+
+        $result = $this->injector->inject($html, [
+            'broken_link_fixes' => [[
+                'tag' => 'a', 'attr' => 'href', 'broken_url' => '/dead', 'new_url' => '/live',
+            ]],
+        ]);
+
+        $this->assertStringContainsString('href="/live"', $result);
+        $this->assertStringNotContainsString('href="/dead"', $result);
+    }
+
+    public function testInjectAlwaysAddsSsrFlagWhenProcessed(): void
     {
         $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: ['robots' => 'noindex, nofollow'],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
 
-        $result = $this->injector->inject($html, $suggestions);
+        $result = $this->injector->inject($html, ['title' => 'T']);
 
-        $this->assertStringContainsString(
-            '<meta name="robots" content="noindex, nofollow">',
-            $result,
-        );
+        $this->assertStringContainsString('window.seojuiceSSR = true;', $result);
     }
 
-    public function testInjectMetaTagsEscapesSpecialCharacters(): void
+    public function testInjectFailsOpenWhenNoBodyTag(): void
     {
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [
-                'title' => 'Page "Title" & <More>',
-                'description' => 'Description with "quotes" & <tags>',
-            ],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
+        $html = '<html><head></head><p>No body wrapper here at all</p></html>';
 
-        $result = $this->injector->inject($html, $suggestions);
+        $result = $this->injector->inject($html, ['title' => 'Injected Title Should Not Appear']);
 
-        $this->assertStringContainsString(
-            '<title>Page &quot;Title&quot; &amp; &lt;More&gt;</title>',
-            $result,
-        );
-        $this->assertStringContainsString(
-            'content="Description with &quot;quotes&quot; &amp; &lt;tags&gt;"',
-            $result,
-        );
+        $this->assertSame($html, $result);
     }
 
-    public function testInjectMetaTagsSkipsEmptyTitle(): void
+    public function testInjectChainsAllTransformationsTogether(): void
     {
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: ['title' => '', 'description' => 'Valid description'],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
+        $html = '<html><head></head><body><img src="/logo.png"><p>Read our widget guide for more on widgets today.</p></body></html>';
 
-        $result = $this->injector->inject($html, $suggestions);
+        $result = $this->injector->inject($html, [
+            'title' => 'Home Page',
+            'meta_description' => 'Welcome to our site',
+            'og_title' => 'OG Home',
+            'og_image' => 'https://example.com/og.jpg',
+            'structured_data' => json_encode(json_encode(['@type' => 'WebSite', 'name' => 'Our Site'])),
+            'images' => [['url' => '/logo.png', 'alt_text' => 'Company Logo']],
+            'suggestions' => [['keyword' => 'widget', 'url' => '/widgets', 'id' => 1]],
+        ]);
 
-        $this->assertStringNotContainsString('<title>', $result);
-        $this->assertStringContainsString('content="Valid description"', $result);
-    }
-
-    public function testInjectMetaTagsInjectsAllTagsTogether(): void
-    {
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [
-                'title' => 'Full Title',
-                'description' => 'Full Description',
-                'canonical' => 'https://example.com/',
-                'robots' => 'index, follow',
-            ],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString('<title>Full Title</title>', $result);
-        $this->assertStringContainsString('content="Full Description"', $result);
-        $this->assertStringContainsString('href="https://example.com/"', $result);
-        $this->assertStringContainsString('content="index, follow"', $result);
-    }
-
-    // --- injectOgTags ---
-
-    public function testInjectOgTagsInjectsOgTitleDescriptionAndImage(): void
-    {
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [
-                'title' => 'OG Title',
-                'description' => 'OG Description',
-                'image' => 'https://example.com/og.jpg',
-            ],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString(
-            '<meta property="og:title" content="OG Title">',
-            $result,
-        );
-        $this->assertStringContainsString(
-            '<meta property="og:description" content="OG Description">',
-            $result,
-        );
-        $this->assertStringContainsString(
-            '<meta property="og:image" content="https://example.com/og.jpg">',
-            $result,
-        );
-    }
-
-    public function testInjectOgTagsSkipsNullValues(): void
-    {
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [
-                'title' => 'OG Title',
-                'description' => null,
-                'image' => '',
-            ],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString('og:title', $result);
-        $this->assertStringNotContainsString('og:description', $result);
-        $this->assertStringNotContainsString('og:image', $result);
-    }
-
-    public function testInjectOgTagsEscapesValues(): void
-    {
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [
-                'title' => 'Title "with" <special> & chars',
-            ],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString(
-            'content="Title &quot;with&quot; &lt;special&gt; &amp; chars"',
-            $result,
-        );
-    }
-
-    public function testInjectOgTagsDoesNothingForEmptyOgTags(): void
-    {
-        $html = $this->makeHtml('', '<p>Content</p>');
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: ['title' => 'Some Title'],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringNotContainsString('og:', $result);
-    }
-
-    // --- injectStructuredData ---
-
-    public function testInjectStructuredDataInjectsJsonLdScriptTags(): void
-    {
-        $schema = [
-            '@context' => 'https://schema.org',
-            '@type' => 'Organization',
-            'name' => 'Test Corp',
-            'url' => 'https://example.com',
-        ];
-
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [],
-            structuredData: [$schema],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString('<script type="application/ld+json">', $result);
-        $this->assertStringContainsString('"@type":"Organization"', $result);
-        $this->assertStringContainsString('"name":"Test Corp"', $result);
-    }
-
-    public function testInjectStructuredDataInjectsMultipleSchemas(): void
-    {
-        $schemas = [
-            ['@type' => 'Organization', 'name' => 'Corp A'],
-            ['@type' => 'WebSite', 'name' => 'Site A'],
-        ];
-
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [],
-            structuredData: $schemas,
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertSame(2, substr_count($result, '<script type="application/ld+json">'));
-        $this->assertStringContainsString('"@type":"Organization"', $result);
-        $this->assertStringContainsString('"@type":"WebSite"', $result);
-    }
-
-    public function testInjectStructuredDataPreservesUrlSlashes(): void
-    {
-        $schema = [
-            '@context' => 'https://schema.org',
-            'url' => 'https://example.com/page/subpage',
-        ];
-
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [],
-            structuredData: [$schema],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        // JSON_UNESCAPED_SLASHES ensures URLs are not escaped
-        $this->assertStringContainsString('https://example.com/page/subpage', $result);
-        $this->assertStringNotContainsString('https:\\/\\/example.com', $result);
-    }
-
-    public function testInjectStructuredDataPlacedBeforeCloseHead(): void
-    {
-        $schema = ['@type' => 'WebSite'];
-
-        $html = $this->makeHtml();
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: [],
-            structuredData: [$schema],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $scriptPos = strpos($result, '<script type="application/ld+json">');
-        $headClosePos = strpos($result, '</head>');
-        $this->assertNotFalse($scriptPos);
-        $this->assertNotFalse($headClosePos);
-        $this->assertLessThan($headClosePos, $scriptPos);
-    }
-
-    // --- applyImageAlts ---
-
-    public function testApplyImageAltsAddsAltToImagesWithoutAltAttribute(): void
-    {
-        $html = $this->makeHtml(
-            '',
-            '<img src="/img/photo.jpg"> <img src="/img/other.jpg">',
-        );
-        $suggestions = new Suggestions(
-            links: [],
-            images: [
-                ['src' => '/img/photo.jpg', 'alt' => 'A beautiful photo'],
-            ],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString('alt="A beautiful photo"', $result);
-        // The other image should not have an alt added
-        $this->assertStringNotContainsString('alt="A beautiful photo"', substr(
-            $result,
-            (int) strpos($result, 'other.jpg'),
-        ));
-    }
-
-    public function testApplyImageAltsReplacesEmptyAltAttributes(): void
-    {
-        $html = $this->makeHtml(
-            '',
-            '<img src="/img/banner.png" alt="">',
-        );
-        $suggestions = new Suggestions(
-            links: [],
-            images: [
-                ['src' => '/img/banner.png', 'alt' => 'Website banner'],
-            ],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString('alt="Website banner"', $result);
-        $this->assertStringNotContainsString('alt=""', $result);
-    }
-
-    public function testApplyImageAltsSkipsImagesWithNullAlt(): void
-    {
-        $html = $this->makeHtml('', '<img src="/img/test.jpg">');
-        $suggestions = new Suggestions(
-            links: [],
-            images: [
-                ['src' => '/img/test.jpg', 'alt' => null],
-            ],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        // Should not modify the image when alt is null
-        $this->assertStringContainsString('<img src="/img/test.jpg">', $result);
-    }
-
-    public function testApplyImageAltsSkipsImagesWithEmptyAltSuggestion(): void
-    {
-        $html = $this->makeHtml('', '<img src="/img/test.jpg">');
-        $suggestions = new Suggestions(
-            links: [],
-            images: [
-                ['src' => '/img/test.jpg', 'alt' => ''],
-            ],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        // Should not add empty alt
-        $this->assertStringNotContainsString('alt=""', $result);
-    }
-
-    public function testApplyImageAltsEscapesSpecialCharacters(): void
-    {
-        $html = $this->makeHtml('', '<img src="/img/test.jpg">');
-        $suggestions = new Suggestions(
-            links: [],
-            images: [
-                ['src' => '/img/test.jpg', 'alt' => 'Photo of "cats" & <dogs>'],
-            ],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString(
-            'alt="Photo of &quot;cats&quot; &amp; &lt;dogs&gt;"',
-            $result,
-        );
-    }
-
-    public function testApplyImageAltsHandlesMultipleImages(): void
-    {
-        $html = $this->makeHtml(
-            '',
-            '<img src="/a.jpg"> <img src="/b.jpg" alt="">',
-        );
-        $suggestions = new Suggestions(
-            links: [],
-            images: [
-                ['src' => '/a.jpg', 'alt' => 'Image A'],
-                ['src' => '/b.jpg', 'alt' => 'Image B'],
-            ],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertStringContainsString('alt="Image A"', $result);
-        $this->assertStringContainsString('alt="Image B"', $result);
-    }
-
-    // --- Full inject() chains all transformations ---
-
-    public function testFullInjectChainsAllTransformations(): void
-    {
-        $html = '<html><head></head><body><img src="/logo.png"></body></html>';
-        $suggestions = new Suggestions(
-            links: [['href' => '/about']],
-            images: [
-                ['src' => '/logo.png', 'alt' => 'Company Logo'],
-            ],
-            metaTags: [
-                'title' => 'Home Page',
-                'description' => 'Welcome to our site',
-            ],
-            structuredData: [
-                ['@type' => 'WebSite', 'name' => 'Our Site'],
-            ],
-            accessibilityFixes: [
-                ['type' => 'aria-label'],
-            ],
-            ogTags: [
-                'title' => 'OG Home',
-                'image' => 'https://example.com/og.jpg',
-            ],
-        );
-
-        $result = $this->injector->inject($html, $suggestions);
-
-        // Meta tags injected
-        $this->assertStringContainsString('<title>Home Page</title>', $result);
+        $this->assertStringContainsString('<title data-seojuice="title">Home Page</title>', $result);
         $this->assertStringContainsString('content="Welcome to our site"', $result);
-
-        // OG tags injected
         $this->assertStringContainsString('og:title', $result);
         $this->assertStringContainsString('og:image', $result);
-
-        // Structured data injected
         $this->assertStringContainsString('application/ld+json', $result);
         $this->assertStringContainsString('"@type":"WebSite"', $result);
-
-        // Image alt applied
         $this->assertStringContainsString('alt="Company Logo"', $result);
+        $this->assertStringContainsString('<a href="/widgets" data-seojuice-cs="1">widget</a>', $result);
+        $this->assertStringContainsString('window.seojuiceSSR = true;', $result);
     }
 
     public function testInjectIsCaseInsensitiveForHeadTag(): void
     {
-        $html = '<html><HEAD></HEAD><body></body></html>';
-        $suggestions = new Suggestions(
-            links: [],
-            images: [],
-            metaTags: ['title' => 'Test Title'],
-            structuredData: [],
-            accessibilityFixes: [],
-            ogTags: [],
-        );
+        $html = '<html><HEAD></HEAD><body>Body content long enough to survive the fail-open ratio check.</body></html>';
 
-        $result = $this->injector->inject($html, $suggestions);
+        $result = $this->injector->inject($html, ['title' => 'Test Title']);
 
-        $this->assertStringContainsString('<title>Test Title</title>', $result);
-    }
-
-    public function testInjectWithOnlyEmptyMetaTagsReturnsSameHtml(): void
-    {
-        $html = $this->makeHtml('', '<p>Content</p>');
-        $suggestions = new Suggestions(
-            links: [['href' => '/link']],
-            images: [],
-            metaTags: [],
-            structuredData: [],
-            accessibilityFixes: [['type' => 'fix']],
-            ogTags: [],
-        );
-
-        // Note: links and accessibilityFixes are not injected by inject() directly,
-        // only metaTags, ogTags, structuredData, and images are.
-        // Since metaTags, ogTags, structuredData are empty, and images is empty,
-        // the HTML should be unchanged (the non-empty check on isEmpty uses links/accessibilityFixes,
-        // so inject() IS called, but each sub-method returns html unchanged).
-        $result = $this->injector->inject($html, $suggestions);
-
-        $this->assertSame($html, $result);
+        $this->assertStringContainsString('Test Title', $result);
     }
 }

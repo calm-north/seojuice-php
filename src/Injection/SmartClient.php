@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace SEOJuice\Injection;
 
 use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
 use SEOJuice\Config;
-use SEOJuice\Exceptions\SEOJuiceException;
 
 final class SmartClient
 {
@@ -25,7 +23,10 @@ final class SmartClient
         ]);
     }
 
-    public function suggestions(string $url): Suggestions
+    /**
+     * @return array<string, mixed>
+     */
+    public function suggestions(string $url): array
     {
         try {
             $response = $this->client->request('GET', 'suggestions', [
@@ -35,12 +36,9 @@ final class SmartClient
             $body = (string) $response->getBody();
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
 
-            return Suggestions::fromArray($data);
-        } catch (GuzzleException $e) {
-            throw new SEOJuiceException(
-                'Failed to fetch suggestions: ' . $e->getMessage(),
-                'smart_client_error',
-            );
+            return is_array($data) ? $data : [];
+        } catch (\Throwable) {
+            return [];
         }
     }
 }

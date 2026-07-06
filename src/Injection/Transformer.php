@@ -9,6 +9,8 @@ final class Transformer
     public const SKIP_TAG_RE = '/^<(a|script|style|title|h[1-6])[\s\/>]/i';
     public const CLOSE_TAG_RE = '/^<\/(a|script|style|title|h[1-6])>/i';
     private const SINGLE_ROOT_RE = '/^<(\w+)(\s[^>]*)?>/';
+    private const VOID_TAGS = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+    private const CONTENT_AREA_TAGS = ['p', 'li', 'span', 'div', 'td', 'blockquote', 'dd', 'figcaption'];
 
     public static function escapeHtml(string $text): string
     {
@@ -238,6 +240,7 @@ final class Transformer
 
         $isAsian = (bool) ($data['isAsian'] ?? false);
         $customLinkClass = (string) ($data['custom_link_class'] ?? '');
+        $contentAreaOnly = (bool) ($data['insert_into_content_only'] ?? false);
 
         $links = [];
         $seenKeywords = [];
@@ -277,6 +280,7 @@ final class Transformer
         $replacedKeywords = [];
         $segments = self::tokenizeHtml($html);
         $skipDepth = 0;
+        $tagStack = [];
         $result = [];
 
         foreach ($segments as $segment) {
@@ -286,13 +290,19 @@ final class Transformer
                 } elseif ($skipDepth > 0 && preg_match(self::CLOSE_TAG_RE, $segment['value'])) {
                     $skipDepth--;
                 }
+
+                if ($contentAreaOnly) {
+                    self::updateTagStack($segment['value'], $tagStack);
+                }
+
                 $result[] = $segment['value'];
                 continue;
             }
 
             $text = $segment['value'];
+            $inContentArea = !$contentAreaOnly || ($tagStack !== [] && in_array(end($tagStack), self::CONTENT_AREA_TAGS, true));
 
-            if ($skipDepth === 0) {
+            if ($skipDepth === 0 && $inContentArea) {
                 foreach ($links as $link) {
                     if (isset($replacedKeywords[$link['kl']])) {
                         continue;
@@ -464,5 +474,132 @@ final class Transformer
             $html,
             1,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public static function validateApiResponse(array $data): bool
+    {
+        if (!empty($data['errors'])) {
+            return false;
+        }
+
+        // broken_link_fixes and h1 are treated as actionable alongside the WP-ported
+        // fields — both are first-class parity features (Tasks 3 and 7) that WP's
+        // original hasContent check predates and never accounted for.
+        $hasContent = !empty($data['title'])
+            || !empty($data['meta_description'])
+            || !empty($data['suggestions'])
+            || !empty($data['images'])
+            || !empty($data['structured_data'])
+            || !empty($data['og_title'])
+            || !empty($data['broken_link_fixes'])
+            || !empty($data['h1'])
+            || (isset($data['diffs']) && is_array($data['diffs']) && $data['diffs'] !== []);
+
+        if (!$hasContent) {
+            return false;
+        }
+
+        if (isset($data['suggestions']) && !is_array($data['suggestions'])) {
+            return false;
+        }
+
+        if (isset($data['images']) && !is_array($data['images'])) {
+            return false;
+        }
+
+        if (isset($data['diffs']) && !is_array($data['diffs'])) {
+            return false;
+        }
+
+        if (isset($data['broken_link_fixes']) && !is_array($data['broken_link_fixes'])) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array{cs: array<int, int|string>, meta: array<int, string>, img: int, schema: int, h1: int} $manifest
+     */
+    public static function addManifestComment(string $html, array $manifest): string
+    {
+        if (str_contains($html, '<!-- seojuice:')) {
+            return $html;
+        }
+
+        $parts = [];
+
+        $csIds = $manifest['cs'] ?? [];
+        if ($csIds !== []) {
+            $parts[] = 'cs=[' . implode(',', $csIds) . ']';
+        }
+
+        $metaKeys = $manifest['meta'] ?? [];
+        if ($metaKeys !== []) {
+            $parts[] = 'meta=[' . implode(',', $metaKeys) . ']';
+        }
+
+        if (($manifest['img'] ?? 0) > 0) {
+            $parts[] = 'img=' . $manifest['img'];
+        }
+
+        if (!empty($manifest['schema'])) {
+            $parts[] = 'schema=1';
+        }
+
+        if (!empty($manifest['h1'])) {
+            $parts[] = 'h1=1';
+        }
+
+        if ($parts === []) {
+            return $html;
+        }
+
+        $comment = '<!-- seojuice: ' . implode(' ', $parts) . ' -->';
+
+        return (string) preg_replace('/<\/body>/i', $comment . "\n</body>", $html, 1);
+    }
+
+    public static function addSsrFlag(string $html): string
+    {
+        if (str_contains($html, 'window.seojuiceSSR')) {
+            return $html;
+        }
+
+        return (string) preg_replace(
+            '/<\/body>/i',
+            "<script>window.seojuiceSSR = true;</script>\n</body>",
+            $html,
+            1,
+        );
+    }
+
+    /**
+     * @param array<int, string> $stack
+     */
+    private static function updateTagStack(string $tagValue, array &$stack): void
+    {
+        if (!preg_match('/^<\/?([a-zA-Z][a-zA-Z0-9]*)/', $tagValue, $matches)) {
+            return;
+        }
+
+        $name = strtolower($matches[1]);
+
+        if (str_starts_with($tagValue, '</')) {
+            if ($stack !== [] && end($stack) === $name) {
+                array_pop($stack);
+            }
+
+            return;
+        }
+
+        $isSelfClosing = str_ends_with(rtrim($tagValue, '>'), '/') || in_array($name, self::VOID_TAGS, true);
+
+        if (!$isSelfClosing) {
+            $stack[] = $name;
+        }
     }
 }
