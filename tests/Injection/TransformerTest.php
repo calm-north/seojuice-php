@@ -294,4 +294,39 @@ final class TransformerTest extends TestCase
         $this->assertSame('<div><p>new</p></div>', $html);
         $this->assertSame([], $manifest['cs']);
     }
+
+    public function testApplyBrokenLinkFixesReplacesViaEdgeNewUrl(): void
+    {
+        $fixes = [['tag' => 'a', 'attr' => 'href', 'broken_url' => '/dead', 'new_url' => '/live', 'action' => 'replace']];
+        $html = Transformer::applyBrokenLinkFixes('<a href="/dead">link</a>', $fixes);
+
+        $this->assertSame('<a href="/live">link</a>', $html);
+    }
+
+    public function testApplyBrokenLinkFixesReplacesViaLegacyReplacementUrlWhenNewUrlEmpty(): void
+    {
+        $fixes = [[
+            'tag' => 'a', 'attr' => 'href', 'broken_url' => '/dead', 'new_url' => '',
+            'replacement_url' => '/live-legacy', 'action' => 'replace',
+        ]];
+        $html = Transformer::applyBrokenLinkFixes('<a href="/dead">link</a>', $fixes);
+
+        $this->assertSame('<a href="/live-legacy">link</a>', $html);
+    }
+
+    public function testApplyBrokenLinkFixesUnlinkRemovesWholeAnchor(): void
+    {
+        $fixes = [['tag' => 'a', 'attr' => 'href', 'broken_url' => '/dead', 'action' => 'unlink']];
+        $html = Transformer::applyBrokenLinkFixes('<p>See <a href="/dead">this</a> now.</p>', $fixes);
+
+        $this->assertSame('<p>See  now.</p>', $html);
+    }
+
+    public function testApplyBrokenLinkFixesLeavesDataHrefUntouched(): void
+    {
+        $fixes = [['tag' => 'a', 'attr' => 'href', 'broken_url' => '/dead', 'new_url' => '/live', 'action' => 'replace']];
+        $html = Transformer::applyBrokenLinkFixes('<a data-href="/dead" href="/dead">link</a>', $fixes);
+
+        $this->assertSame('<a data-href="/dead" href="/live">link</a>', $html);
+    }
 }

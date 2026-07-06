@@ -8,6 +8,7 @@ final class Transformer
 {
     public const SKIP_TAG_RE = '/^<(a|script|style|title|h[1-6])[\s\/>]/i';
     public const CLOSE_TAG_RE = '/^<\/(a|script|style|title|h[1-6])>/i';
+    private const SINGLE_ROOT_RE = '/^<(\w+)(\s[^>]*)?>/';
 
     public static function escapeHtml(string $text): string
     {
@@ -327,7 +328,60 @@ final class Transformer
         return implode('', $result);
     }
 
-    private const SINGLE_ROOT_RE = '/^<(\w+)(\s[^>]*)?>/';
+    /**
+     * @param array<int, array<string, mixed>> $fixes
+     */
+    public static function applyBrokenLinkFixes(string $html, array $fixes): string
+    {
+        foreach ($fixes as $fix) {
+            try {
+                $tag = strtolower((string) ($fix['tag'] ?? ''));
+                $attr = strtolower((string) ($fix['attr'] ?? ''));
+                $brokenUrl = (string) ($fix['broken_url'] ?? ($fix['old_url'] ?? ''));
+                $newUrl = ((string) ($fix['new_url'] ?? '')) !== ''
+                    ? (string) $fix['new_url']
+                    : (string) ($fix['replacement_url'] ?? '');
+                $action = ($fix['action'] ?? '') === 'unlink' ? 'unlink' : 'replace';
+
+                if ($tag === '' || $attr === '' || $brokenUrl === '') {
+                    continue;
+                }
+                if ($action === 'replace' && $newUrl === '') {
+                    continue;
+                }
+                if ($tag !== 'a' && $tag !== 'img') {
+                    continue;
+                }
+                if ($attr !== 'href' && $attr !== 'src') {
+                    continue;
+                }
+
+                $escapedOldUrl = preg_quote($brokenUrl, '/');
+
+                if ($action === 'replace') {
+                    $re = '/(<' . $tag . '\b[^>]*\s' . $attr . '=)(["\'])(' . $escapedOldUrl . ')\2([^>]*>)/i';
+                    $newUrlEscaped = self::escapeHtml($newUrl);
+                    $html = (string) preg_replace_callback(
+                        $re,
+                        static function (array $matches) use ($newUrlEscaped): string {
+                            return $matches[1] . $matches[2] . $newUrlEscaped . $matches[2] . $matches[4];
+                        },
+                        $html,
+                    );
+                } elseif ($tag === 'img') {
+                    $re = '/<img\b[^>]*\s' . $attr . '=["\']' . $escapedOldUrl . '["\'][^>]*>/i';
+                    $html = (string) preg_replace($re, '', $html);
+                } else {
+                    $re = '/<a\b[^>]*\s' . $attr . '=["\']' . $escapedOldUrl . '["\'][^>]*>[\s\S]*?<\/a>/i';
+                    $html = (string) preg_replace($re, '', $html);
+                }
+            } catch (\Throwable) {
+                // one bad fix never aborts the page
+            }
+        }
+
+        return $html;
+    }
 
     /**
      * @param array<int, array<string, mixed>> $diffs
