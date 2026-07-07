@@ -383,23 +383,24 @@ $changes->revert(44, reason: 'Caused ranking drop');
 
 // Pull (mark as deployed by integration) and verify
 $changes->pull(45, integration: 'wordpress');
-$changes->verify(45);
+$changes->verify(45, integration: 'wordpress');
 
 // Bulk actions
 $result = $changes->bulk(
     action: 'approve',
-    changeIds: [10, 11, 12],
+    ids: [10, 11, 12],
 );
 echo "Succeeded: {$result->totalSucceeded}";
 
 // Automation settings
 $settings = $changes->settings();
-echo $settings->automationMode;
+echo $settings->internalLinksMode;
 
-$changes->updateSettings(
-    autoApproveInternalLinks: true,
-    autoApproveMetaDescriptions: false,
-);
+$changes->updateSettings([
+    'internal_links_mode' => 'auto_deploy',
+    'meta_tags_mode' => 'suggest',
+    'max_changes_per_day' => 50,
+]);
 ```
 
 ### Action Items
@@ -599,6 +600,8 @@ match ($payload['event']) {
     'change.created'  => handleChangeCreated($payload),
     'change.approved' => handleChangeApproved($payload),
     'change.applied'  => handleChangeApplied($payload),
+    'change.pulled'   => handleChangePulled($payload),
+    'change.verified' => handleChangeVerified($payload),
     'change.reverted' => handleChangeReverted($payload),
     'change.rejected' => handleChangeRejected($payload),
     default           => null,
