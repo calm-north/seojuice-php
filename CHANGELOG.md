@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0
+
+### Fixed
+- **structured_data now injects as valid JSON-LD against the live payload** (single- or double-encoded, defensively decoded; the previous double-decode dropped the schema on the real single-encoded payload).
+- **CJK internal links at sentence end** — the link boundary now allows full-width Japanese punctuation (`。、！？）」』`).
+- **Content diffs on hydrated pages** — occurrence/ambiguity detection ignores `<script>`/`<style>` regions, so hydration-script duplicates no longer skip the visible-body diff.
+- Minor: empty-object schema now emits `{}` (was `[]`); `maskScriptStyle` degrades gracefully on PCRE-limit input instead of dropping all diffs.
+
 ## 1.2.0 (2026-07-06)
 
 ### Breaking Changes

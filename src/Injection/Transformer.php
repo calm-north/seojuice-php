@@ -165,7 +165,13 @@ final class Transformer
             }
 
             if (is_array($obj) && !preg_match('/<script[^>]*type=["\']application\/ld\+json["\'][^>]*>/i', $html)) {
-                $json = json_encode($obj, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                // json_decode(..., true) turns both `{}` and `[]` into a PHP `[]`,
+                // so a genuinely empty *object* schema would re-encode as `[]`,
+                // diverging from node/python which preserve `{}`. Force the
+                // empty-array case back to an object so it round-trips as `{}`.
+                $json = $obj === []
+                    ? '{}'
+                    : json_encode($obj, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
                 $html = self::replaceFirstLiteral(
                     '/<\/head>/i',
                     '<script type="application/ld+json" data-seojuice="schema">' . $json . "</script>\n</head>",
@@ -427,13 +433,22 @@ final class Transformer
      */
     private static function maskScriptStyle(string $html): string
     {
-        return (string) preg_replace_callback(
+        // preg_replace_callback returns null on a PCRE error (e.g. backtrack
+        // limit exhausted on pathological input). Casting that null to string
+        // silently blanks the entire document, which would make every
+        // applyContentDiffs() lookup fail and skip ALL diffs. Fall back to the
+        // unmasked $html instead — this degrades to the pre-mask behavior
+        // (script/style duplicates can trip the ambiguity guard) rather than
+        // dropping every diff outright.
+        $masked = preg_replace_callback(
             self::SCRIPT_STYLE_RE,
             static function (array $matches): string {
                 return $matches[1] . str_repeat("\x00", strlen($matches[3])) . $matches[4];
             },
             $html,
         );
+
+        return $masked ?? $html;
     }
 
     /**
