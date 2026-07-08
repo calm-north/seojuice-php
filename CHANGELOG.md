@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+- `SEOJuice\Webhooks::verifySignature()` — webhook HMAC-SHA256 verification, parity with the Python/Node SDKs.
+
 ## 1.3.1
 
 ### Added

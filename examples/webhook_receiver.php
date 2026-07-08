@@ -21,25 +21,14 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SEOJuice\Webhooks;
+
 $webhookSecret = getenv('SEOJUICE_WEBHOOK_SECRET') ?: '';
 
 if ($webhookSecret === '') {
     http_response_code(500);
     echo json_encode(['error' => 'SEOJUICE_WEBHOOK_SECRET not configured']);
     exit;
-}
-
-// --- Signature verification ---
-
-function verifySignature(string $payload, ?string $signature, string $secret): bool
-{
-    if ($signature === null || $signature === '') {
-        return false;
-    }
-
-    $expected = hash_hmac('sha256', $payload, $secret);
-
-    return hash_equals($expected, $signature);
 }
 
 // --- Event handlers ---
@@ -147,7 +136,7 @@ if ($rawBody === false || $rawBody === '') {
 
 $signature = $_SERVER['HTTP_X_SEOJUICE_SIGNATURE'] ?? null;
 
-if (!verifySignature($rawBody, $signature, $webhookSecret)) {
+if (!Webhooks::verifySignature($webhookSecret, $rawBody, $signature ?? '')) {
     http_response_code(401);
     echo json_encode(['error' => 'Invalid signature']);
     error_log('[webhook] Invalid signature, rejecting');

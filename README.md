@@ -586,8 +586,7 @@ $webhookSecret = getenv('SEOJUICE_WEBHOOK_SECRET') ?: '';
 $rawBody = file_get_contents('php://input');
 $signature = $_SERVER['HTTP_X_SEOJUICE_SIGNATURE'] ?? null;
 
-$expected = hash_hmac('sha256', $rawBody, $webhookSecret);
-$isValid = hash_equals($expected, $signature ?? '');
+$isValid = \SEOJuice\Webhooks::verifySignature($webhookSecret, $rawBody, $signature ?? '');
 
 if (!$isValid) {
     http_response_code(401);
