@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.1
+
+### Added
+- `ChangeRecord` now exposes `riskLevel`, `batchId`, `batchLabel`, and `editedManually` (parity with the Python/Node SDKs and the `/changes` payload).
+- `ChangeSettings` now exposes `h1TagsMode`; `excludePaths` is now nullable (the API sends `null` when unset).
+
+### Fixed
+- README examples: corrected the `verifyWebhookSignature` argument, settings property access, bulk / `updateSettings` argument shapes, and the webhook event list.
+
 ## 1.3.0
 
 ### Fixed

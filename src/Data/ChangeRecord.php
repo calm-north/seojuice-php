@@ -9,6 +9,7 @@ final class ChangeRecord
     public readonly int $id;
     public readonly string $changeType;
     public readonly string $status;
+    public readonly ?string $riskLevel;
     public readonly ?string $pageUrl;
     public readonly ?string $proposedValue;
     public readonly ?string $previousValue;
@@ -37,6 +38,9 @@ final class ChangeRecord
     public readonly ?string $verifiedAt;
     public readonly ?string $revertedAt;
     public readonly ?string $revertReason;
+    public readonly ?string $batchId;
+    public readonly ?string $batchLabel;
+    public readonly bool $editedManually;
 
     /**
      * @param array<int, mixed> $alternatives
@@ -51,6 +55,7 @@ final class ChangeRecord
         int $id,
         string $changeType,
         string $status,
+        ?string $riskLevel,
         ?string $pageUrl,
         ?string $proposedValue,
         ?string $previousValue,
@@ -72,10 +77,14 @@ final class ChangeRecord
         ?string $verifiedAt,
         ?string $revertedAt,
         ?string $revertReason,
+        ?string $batchId,
+        ?string $batchLabel,
+        bool $editedManually,
     ) {
         $this->id = $id;
         $this->changeType = $changeType;
         $this->status = $status;
+        $this->riskLevel = $riskLevel;
         $this->pageUrl = $pageUrl;
         $this->proposedValue = $proposedValue;
         $this->previousValue = $previousValue;
@@ -97,6 +106,9 @@ final class ChangeRecord
         $this->verifiedAt = $verifiedAt;
         $this->revertedAt = $revertedAt;
         $this->revertReason = $revertReason;
+        $this->batchId = $batchId;
+        $this->batchLabel = $batchLabel;
+        $this->editedManually = $editedManually;
     }
 
     /**
@@ -108,6 +120,7 @@ final class ChangeRecord
             id: (int) $data['id'],
             changeType: (string) ($data['change_type'] ?? ''),
             status: (string) ($data['status'] ?? ''),
+            riskLevel: $data['risk_level'] ?? null,
             pageUrl: $data['page_url'] ?? null,
             proposedValue: $data['proposed_value'] ?? null,
             previousValue: $data['previous_value'] ?? null,
@@ -129,6 +142,9 @@ final class ChangeRecord
             verifiedAt: $data['verified_at'] ?? null,
             revertedAt: $data['reverted_at'] ?? null,
             revertReason: $data['revert_reason'] ?? null,
+            batchId: $data['batch_id'] ?? null,
+            batchLabel: $data['batch_label'] ?? null,
+            editedManually: (bool) ($data['edited_manually'] ?? false),
         );
     }
 }
