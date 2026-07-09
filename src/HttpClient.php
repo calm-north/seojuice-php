@@ -139,8 +139,9 @@ class HttpClient
      */
     private function handleRequestException(RequestException $e): never
     {
-        $status = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 0;
-        $body = $e->hasResponse() ? (string) $e->getResponse()->getBody() : '';
+        $response = $e->hasResponse() ? $e->getResponse() : null;
+        $status = $response?->getStatusCode() ?? 0;
+        $body = $response !== null ? (string) $response->getBody() : '';
 
         $decoded = [];
         if ($body !== '') {
@@ -150,19 +151,22 @@ class HttpClient
         $message = $decoded['detail'] ?? $decoded['message'] ?? $e->getMessage();
         $errorCode = $decoded['error_code'] ?? 'unknown';
 
-        $this->throwForStatus($status, $message, $errorCode);
+        $retryAfterHeader = $response !== null ? $response->getHeaderLine('Retry-After') : '';
+        $retryAfter = ($retryAfterHeader !== '' && ctype_digit($retryAfterHeader)) ? (int) $retryAfterHeader : null;
+
+        $this->throwForStatus($status, $message, $errorCode, $retryAfter);
     }
 
     /**
      * @return never
      */
-    private function throwForStatus(int $status, string $message, string $errorCode): never
+    private function throwForStatus(int $status, string $message, string $errorCode, ?int $retryAfter = null): never
     {
         throw match (true) {
             $status === 401 => new AuthException($message, $errorCode),
             $status === 403 => new ForbiddenException($message, $errorCode),
             $status === 404 => new NotFoundException($message, $errorCode),
-            $status === 429 => new RateLimitException($message, $errorCode),
+            $status === 429 => new RateLimitException($message, $errorCode, $retryAfter),
             $status === 400, $status === 422 => new ValidationException($message, $errorCode),
             $status >= 500 => new ServerException($message, $errorCode),
             default => new SEOJuiceException($message, $errorCode),

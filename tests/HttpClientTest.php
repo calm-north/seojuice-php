@@ -418,4 +418,20 @@ final class HttpClientTest extends TestCase
         $this->expectException(ServerException::class);
         $client->getRaw('export/');
     }
+
+    public function test429ResponsePopulatesRetryAfterOnException(): void
+    {
+        $mock = new MockHandler([
+            new Response(429, ['Retry-After' => '30'], json_encode(['detail' => 'Slow down'])),
+        ]);
+
+        $client = $this->createHttpClient($mock);
+
+        try {
+            $client->get('websites/');
+            $this->fail('Expected RateLimitException');
+        } catch (RateLimitException $e) {
+            $this->assertSame(30, $e->retryAfter);
+        }
+    }
 }
