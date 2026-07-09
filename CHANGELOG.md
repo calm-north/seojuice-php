@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.4.1
+
+### Security
+- **`Webhooks::verifySignature()` now fails closed on an empty secret.** Previously an empty
+  `$secret` (e.g. an unset `SEOJUICE_WEBHOOK_SECRET`) accepted a signature forged with the empty
+  key, turning the webhook endpoint into an unauthenticated, forgeable one. It now returns `false`
+  when `$secret === ''`. If you relied on empty-secret verification (you should not have), set a
+  real secret.
+
+### Changed
+- **Constructor validation (may surface previously-silent misconfiguration):** `new SEOJuice('')`
+  now throws `ValidationException` (a non-empty `apiKey` is required), and `new Config(timeout: 0)`
+  / `Config(timeout: -1)` now throw `ValidationException` (`timeout` must be > 0). A negative
+  timeout previously hung ~75s.
+- `SmartClient` accepts an optional PSR-3 `LoggerInterface`; `suggestions()` still fails open
+  (returns `[]`) but now logs a warning on failure so silent degradation is observable.
+- `RateLimitException` now exposes `$retryAfter` (seconds), parsed from the `Retry-After` header on 429.
+- The default HTTP clients now set a separate `connect_timeout` (default 10s).
+
+### Fixed
+- A 2xx response with a non-JSON body now throws `SEOJuiceException('invalid_response')` instead of
+  a bare `\JsonException` escaping the documented exception hierarchy.
+- README SSR + Laravel quickstarts rewritten to the array form (`suggestions()` returns an array
+  since 1.2.0) — the previous `->isEmpty()` / `inject($html, $suggestions)` snippets fataled on paste.
+- README webhook quickstart now guards a missing secret instead of feeding `''` to `verifySignature`.
+- Examples guard an unset `SEOJUICE_API_KEY` (`getenv(...) ?: ''` + a check) instead of a cryptic
+  `strict_types` `TypeError`.
+
+### Internal
+- Added a CI doctest gate (`tests/DocsExamplesTest.php`) that lints every example and executes the
+  README SSR + webhook fences against a mock transport.
+- `.gitattributes export-ignore` trims `tests/`, `examples/`, and `phpunit.xml` from the production dist.
+
 ## 1.4.0
 
 ### Added
