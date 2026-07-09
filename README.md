@@ -40,10 +40,13 @@ $config = new Config(
     smartUrl: 'https://smart.seojuice.io',
     timeout: 60,
     userAgent: 'my-app/1.0',
+    connectTimeout: 10,
 );
 
 $client = new SEOJuice('your-api-key', $config);
 ```
+
+An empty API key throws `ValidationException`, as does a `timeout` of `0` or less. `connectTimeout` (seconds to establish the connection, default 10) is separate from `timeout` (seconds for the whole request).
 
 ## Resources
 
@@ -345,7 +348,7 @@ foreach ($result->results as $issue) {
 
 ### Changes
 
-Full lifecycle management for SEO changes — list, review, approve, reject, revert, and automate:
+List, review, approve, reject, revert, and automate SEO changes:
 
 ```php
 use SEOJuice\Enums\ChangeStatus;
@@ -579,7 +582,7 @@ echo count($allPages) . ' total pages';
 
 ## Webhook Verification
 
-Verify incoming webhook signatures using HMAC-SHA256:
+Verify incoming webhook signatures using HMAC-SHA256. `verifySignature()` fails closed on an empty secret — it returns `false` rather than accepting a signature forged with the empty key — so configure `SEOJUICE_WEBHOOK_SECRET` before you rely on it:
 
 ```php
 $webhookSecret = getenv('SEOJUICE_WEBHOOK_SECRET') ?: '';
@@ -640,11 +643,23 @@ if ($data !== []) {
 }
 ```
 
-The `SeoInjector` will:
-- Inject meta tags (title, description, canonical, robots) before `</head>`
-- Inject Open Graph tags before `</head>`
-- Inject JSON-LD structured data before `</head>`
-- Patch image alt attributes for images with empty or missing alt text
+`SeoInjector::inject()` handles four transforms:
+- Meta tags (title, description, canonical, robots) inserted before `</head>`
+- Open Graph tags inserted before `</head>`
+- JSON-LD structured data inserted before `</head>`
+- Image `alt` attributes patched where they are empty or missing
+
+`suggestions()` fails open — it returns `[]` on any network or parse failure rather than throwing. To see those failures instead of a silent empty result, pass a PSR-3 logger; `SEOJuice` forwards it to the client `smart()` builds:
+
+```php
+use SEOJuice\SEOJuice;
+
+// $logger is any PSR-3 Psr\Log\LoggerInterface.
+$client = new SEOJuice('your-api-key', logger: $logger);
+
+// A failed fetch now logs a warning and still returns [].
+$data = $client->smart()->suggestions('https://example.com/blog/post');
+```
 
 ## Laravel Integration
 
@@ -726,8 +741,10 @@ try {
     // 404 - Resource not found
     echo 'Not found: ' . $e->getMessage();
 } catch (RateLimitException $e) {
-    // 429 - Rate limit exceeded
-    echo 'Rate limited: ' . $e->getMessage();
+    // 429 - Rate limit exceeded. $retryAfter holds the Retry-After
+    // header value in seconds, or null if the header was absent.
+    $wait = $e->retryAfter ?? 5;
+    echo "Rate limited, retry after {$wait}s: " . $e->getMessage();
 } catch (ValidationException $e) {
     // 400/422 - Invalid request
     echo 'Validation error: ' . $e->getMessage();
@@ -739,6 +756,8 @@ try {
     echo 'Error [' . $e->errorCode . ']: ' . $e->getMessage();
 }
 ```
+
+A `2xx` response with a non-JSON body throws `SEOJuiceException` with error code `invalid_response`, so a malformed success stays inside this hierarchy — you never catch a bare `\JsonException`.
 
 ## License
 
