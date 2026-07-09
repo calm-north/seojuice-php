@@ -434,4 +434,32 @@ final class HttpClientTest extends TestCase
             $this->assertSame(30, $e->retryAfter);
         }
     }
+
+    public function testGetWithHtmlBodyThrowsSeoJuiceExceptionNotJsonException(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], '<html><body>Maintenance</body></html>'),
+        ]);
+
+        $client = $this->createHttpClient($mock);
+
+        try {
+            $client->get('websites/');
+            $this->fail('Expected SEOJuiceException');
+        } catch (SEOJuiceException $e) {
+            $this->assertSame('invalid_response', $e->errorCode);
+        }
+    }
+
+    public function testPostWithNonJsonBodyThrowsSeoJuiceException(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], 'not json'),
+        ]);
+
+        $client = $this->createHttpClient($mock);
+
+        $this->expectException(SEOJuiceException::class);
+        $client->post('websites/', ['domain' => 'x.com']);
+    }
 }

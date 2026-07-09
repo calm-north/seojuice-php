@@ -53,7 +53,7 @@ class HttpClient
             $response = $this->client->request('GET', $url);
             $body = (string) $response->getBody();
 
-            return json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+            return $this->decodeJson($body);
         } catch (RequestException $e) {
             $this->handleRequestException($e);
         } catch (GuzzleException $e) {
@@ -75,7 +75,7 @@ class HttpClient
             ]);
             $responseBody = (string) $response->getBody();
 
-            return json_decode($responseBody, true, 512, JSON_THROW_ON_ERROR);
+            return $this->decodeJson($responseBody);
         } catch (RequestException $e) {
             $this->handleRequestException($e);
         } catch (GuzzleException $e) {
@@ -97,7 +97,7 @@ class HttpClient
             ]);
             $responseBody = (string) $response->getBody();
 
-            return json_decode($responseBody, true, 512, JSON_THROW_ON_ERROR);
+            return $this->decodeJson($responseBody);
         } catch (RequestException $e) {
             $this->handleRequestException($e);
         } catch (GuzzleException $e) {
@@ -121,6 +121,20 @@ class HttpClient
         } catch (GuzzleException $e) {
             throw new SEOJuiceException($e->getMessage(), 'network_error');
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeJson(string $body): array
+    {
+        try {
+            $decoded = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new SEOJuiceException('Invalid JSON in response body: ' . $e->getMessage(), 'invalid_response');
+        }
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**
