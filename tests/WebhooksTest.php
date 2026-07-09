@@ -52,4 +52,22 @@ final class WebhooksTest extends TestCase
 
         $this->assertFalse(Webhooks::verifySignature($secret, $body, 'abc123'));
     }
+
+    public function testEmptySecretRejectsForgedSignature(): void
+    {
+        $body = '{"event":"change.created","change":{"id":1}}';
+        // An attacker who knows the body forges an HMAC using the empty key.
+        $forged = hash_hmac('sha256', $body, '');
+
+        $this->assertFalse(Webhooks::verifySignature('', $body, $forged));
+    }
+
+    public function testValidSignatureWithRealSecretStillVerifies(): void
+    {
+        $secret = 'whsec_test_secret';
+        $body = '{"event":"change.created","change":{"id":1}}';
+        $signature = hash_hmac('sha256', $body, $secret);
+
+        $this->assertTrue(Webhooks::verifySignature($secret, $body, $signature));
+    }
 }
