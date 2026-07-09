@@ -1,0 +1,8 @@
+# Keep the production dist lean — exclude dev-only paths from `composer install --no-dev` archives.
+/tests               export-ignore
+/examples            export-ignore
+/phpunit.xml         export-ignore
+/.gitattributes      export-ignore
+/.gitignore          export-ignore
+/.phpunit.result.cache export-ignore
+/CHANGELOG.md        export-ignore
