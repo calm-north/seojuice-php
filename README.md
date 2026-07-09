@@ -583,6 +583,10 @@ Verify incoming webhook signatures using HMAC-SHA256:
 
 ```php
 $webhookSecret = getenv('SEOJUICE_WEBHOOK_SECRET') ?: '';
+if ($webhookSecret === '') {
+    http_response_code(500);
+    exit('SEOJUICE_WEBHOOK_SECRET not configured');
+}
 $rawBody = file_get_contents('php://input');
 $signature = $_SERVER['HTTP_X_SEOJUICE_SIGNATURE'] ?? null;
 
