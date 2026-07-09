@@ -12,6 +12,7 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
 use SEOJuice\Config;
 use SEOJuice\Injection\SmartClient;
 
@@ -111,5 +112,41 @@ final class SmartClientTest extends TestCase
         $this->assertCount(1, $result['images']);
         $this->assertSame('Page Title', $result['title']);
         $this->assertSame('OG Title', $result['og_title']);
+    }
+
+    public function testSuggestionsLogsWarningOnServerErrorButStillReturnsEmptyArray(): void
+    {
+        $mock = new MockHandler([
+            new Response(500, [], json_encode(['detail' => 'boom'])),
+        ]);
+        $handlerStack = HandlerStack::create($mock);
+        $guzzleClient = new Client(['handler' => $handlerStack]);
+        $config = new Config(smartUrl: 'https://smart.test.io');
+
+        $records = [];
+        $logger = new class($records) extends AbstractLogger {
+            /** @param array<int, string> $records */
+            public function __construct(private array &$records) {}
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = (string) $level;
+            }
+        };
+
+        $client = new SmartClient($config, $guzzleClient, $logger);
+
+        $this->assertSame([], $client->suggestions('https://example.com'));
+        $this->assertContains('warning', $records);
+    }
+
+    public function testSuggestionsWithoutLoggerStillReturnsEmptyArrayOnError(): void
+    {
+        $mock = new MockHandler([
+            new Response(500, [], 'boom'),
+        ]);
+
+        $client = $this->createSmartClient($mock);
+
+        $this->assertSame([], $client->suggestions('https://example.com'));
     }
 }
