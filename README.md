@@ -623,17 +623,17 @@ use SEOJuice\Injection\SeoInjector;
 
 $client = new SEOJuice('your-api-key');
 
-// Fetch suggestions for the current page URL
-$suggestions = $client->smart()->suggestions('https://example.com/blog/post');
+// Fetch suggestions for the current page URL (a plain array; [] on any failure)
+$data = $client->smart()->suggestions('https://example.com/blog/post');
 
-if (!$suggestions->isEmpty()) {
+if ($data !== []) {
     $injector = new SeoInjector();
 
     // Get your rendered HTML (from your template engine, etc.)
     $html = getRenderedHtml();
 
-    // Inject SEO improvements
-    $html = $injector->inject($html, $suggestions);
+    // Inject SEO improvements (no-op on empty/invalid $data)
+    $html = $injector->inject($html, $data);
 
     // Output the enhanced HTML
     echo $html;
@@ -664,9 +664,9 @@ Use middleware to inject SEO tags into responses:
 
 ```php
 // SeoInjectionMiddleware.php
-$suggestions = app(SEOJuice::class)->smart()->suggestions($request->url());
-if (!$suggestions->isEmpty()) {
-    $html = (new SeoInjector())->inject($response->getContent(), $suggestions);
+$data = app(SEOJuice::class)->smart()->suggestions($request->url());
+if ($data !== []) {
+    $html = (new SeoInjector())->inject($response->getContent(), $data);
     $response->setContent($html);
 }
 ```
