@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SEOJuice\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
 use SEOJuice\Config;
 use SEOJuice\Exceptions\ValidationException;
 use SEOJuice\Injection\SmartClient;
@@ -153,5 +154,30 @@ final class SEOJuiceTest extends TestCase
         $this->expectException(ValidationException::class);
 
         new SEOJuice('');
+    }
+
+    public function testSmartSuggestionsLogsWarningThroughDocumentedPublicApi(): void
+    {
+        $records = [];
+        $logger = new class ($records) extends AbstractLogger {
+            /** @param array<int, string> $records */
+            public function __construct(private array &$records) {}
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = (string) $level;
+            }
+        };
+
+        // Malformed scheme makes Guzzle reject the request synchronously
+        // (MalformedUriException), before any network I/O — fast and
+        // fully deterministic, no live network dependency.
+        $config = new Config(smartUrl: 'not-a-valid-uri-scheme://', timeout: 1, connectTimeout: 1);
+        $sdk = new SEOJuice('test-api-key', $config, $logger);
+
+        $result = $sdk->smart()->suggestions('https://example.com/page');
+
+        $this->assertSame([], $result);
+        $this->assertContains('warning', $records);
     }
 }

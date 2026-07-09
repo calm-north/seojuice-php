@@ -16,6 +16,10 @@
   timeout previously hung ~75s.
 - `SmartClient` accepts an optional PSR-3 `LoggerInterface`; `suggestions()` still fails open
   (returns `[]`) but now logs a warning on failure so silent degradation is observable.
+- `SEOJuice::__construct()` accepts an optional PSR-3 `LoggerInterface` and forwards it to
+  `smart()`, so the documented `$client->smart()->suggestions()` path is observable on failure too —
+  previously the logger only reached `SmartClient` when constructed directly, not through the
+  public `smart()` accessor.
 - `RateLimitException` now exposes `$retryAfter` (seconds), parsed from the `Retry-After` header on 429.
 - The default HTTP clients now set a separate `connect_timeout` (default 10s).
 

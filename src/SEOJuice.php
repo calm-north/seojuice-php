@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SEOJuice;
 
+use Psr\Log\LoggerInterface;
 use SEOJuice\Injection\SmartClient;
 use SEOJuice\Resources\AccessibilityResource;
 use SEOJuice\Resources\ActionItemResource;
@@ -31,13 +32,16 @@ final class SEOJuice
 {
     private readonly HttpClient $http;
     private readonly Config $config;
+    private readonly ?LoggerInterface $logger;
 
     public function __construct(
         string $apiKey,
         ?Config $config = null,
+        ?LoggerInterface $logger = null,
     ) {
         $this->config = $config ?? new Config();
         $this->http = new HttpClient($apiKey, $this->config);
+        $this->logger = $logger;
     }
 
     public function websites(): WebsiteResource
@@ -147,6 +151,6 @@ final class SEOJuice
 
     public function smart(): SmartClient
     {
-        return new SmartClient($this->config);
+        return new SmartClient($this->config, null, $this->logger);
     }
 }
