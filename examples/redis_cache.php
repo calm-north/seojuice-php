@@ -74,7 +74,12 @@ class SeoRedisCache
 
 function main(): void
 {
-    $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+    $apiKey = getenv('SEOJUICE_API_KEY') ?: '';
+    if ($apiKey === '') {
+        fwrite(STDERR, "API key not configured — set SEOJUICE_API_KEY\n");
+        return;
+    }
+    $client = new SEOJuice($apiKey);
     $cache = new SeoRedisCache(new Redis(getenv('REDIS_URL') ?: 'tcp://127.0.0.1:6379'));
     $url = 'https://example.com/blog/seo-guide';
 

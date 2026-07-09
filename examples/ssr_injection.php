@@ -86,7 +86,12 @@ function renderWithSeo(string $url, callable $render): string
     $data = SuggestionsCache::get($url);
 
     if ($data === null) {
-        $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+        $apiKey = getenv('SEOJUICE_API_KEY') ?: '';
+        if ($apiKey === '') {
+            fwrite(STDERR, "API key not configured — set SEOJUICE_API_KEY\n");
+            return $html;
+        }
+        $client = new SEOJuice($apiKey);
         $data = $client->smart()->suggestions($url); // returns [] on any failure
         SuggestionsCache::set($url, $data);
     }

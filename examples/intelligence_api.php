@@ -17,9 +17,19 @@ require __DIR__ . '/../vendor/autoload.php';
 use SEOJuice\Enums\Period;
 use SEOJuice\SEOJuice;
 
+function makeClient(): SEOJuice
+{
+    $apiKey = getenv('SEOJUICE_API_KEY') ?: '';
+    if ($apiKey === '') {
+        fwrite(STDERR, "API key not configured — set SEOJUICE_API_KEY\n");
+        exit(1);
+    }
+    return new SEOJuice($apiKey);
+}
+
 function getSeoOverview(string $domain): void
 {
-    $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+    $client = makeClient();
 
     $summary = $client->intelligence($domain)->summary(
         period: Period::ThirtyDays,
@@ -41,7 +51,7 @@ function getSeoOverview(string $domain): void
 
 function findContentGaps(string $domain): void
 {
-    $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+    $client = makeClient();
 
     $result = $client->content($domain)->listGaps(intent: 'informational');
 
@@ -53,7 +63,7 @@ function findContentGaps(string $domain): void
 
 function findDecayingContent(string $domain): void
 {
-    $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+    $client = makeClient();
 
     $result = $client->content($domain)->listDecayAlerts(
         isActive: true,
@@ -68,7 +78,7 @@ function findDecayingContent(string $domain): void
 
 function checkTopology(string $domain): void
 {
-    $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+    $client = makeClient();
 
     $topology = $client->intelligence($domain)->topology();
 
@@ -80,7 +90,7 @@ function checkTopology(string $domain): void
 
 function checkPagespeed(string $domain, string $url): void
 {
-    $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+    $client = makeClient();
 
     $speed = $client->intelligence($domain)->pageSpeed($url);
 
@@ -91,7 +101,7 @@ function checkPagespeed(string $domain, string $url): void
 
 function checkAccessibility(string $domain): void
 {
-    $client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+    $client = makeClient();
 
     $result = $client->accessibility($domain)->list(severity: 'critical');
 

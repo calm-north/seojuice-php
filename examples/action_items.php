@@ -17,7 +17,12 @@ require __DIR__ . '/../vendor/autoload.php';
 use SEOJuice\AutoPaginator;
 use SEOJuice\SEOJuice;
 
-$client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+$apiKey = getenv('SEOJUICE_API_KEY') ?: '';
+if ($apiKey === '') {
+    fwrite(STDERR, "API key not configured — set SEOJUICE_API_KEY\n");
+    exit(1);
+}
+$client = new SEOJuice($apiKey);
 $domain = 'example.com';
 
 function showSummary(SEOJuice $client, string $domain): void

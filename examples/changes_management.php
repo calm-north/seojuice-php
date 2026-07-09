@@ -21,7 +21,12 @@ use SEOJuice\Data\ChangeSettings;
 use SEOJuice\Enums\ChangeStatus;
 use SEOJuice\SEOJuice;
 
-$client = new SEOJuice(getenv('SEOJUICE_API_KEY'));
+$apiKey = getenv('SEOJUICE_API_KEY') ?: '';
+if ($apiKey === '') {
+    fwrite(STDERR, "API key not configured — set SEOJUICE_API_KEY\n");
+    exit(1);
+}
+$client = new SEOJuice($apiKey);
 $domain = 'example.com';
 
 // Change types that are generally safe to auto-approve
