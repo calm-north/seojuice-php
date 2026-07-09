@@ -6,6 +6,7 @@ namespace SEOJuice\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SEOJuice\Config;
+use SEOJuice\Exceptions\ValidationException;
 use SEOJuice\Injection\SmartClient;
 use SEOJuice\Resources\AccessibilityResource;
 use SEOJuice\Resources\AisoResource;
@@ -145,5 +146,12 @@ final class SEOJuiceTest extends TestCase
         $this->assertInstanceOf(PageResource::class, $pages1);
         $this->assertInstanceOf(PageResource::class, $pages2);
         $this->assertNotSame($pages1, $pages2);
+    }
+
+    public function testEmptyApiKeyIsRejectedAtConstruction(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        new SEOJuice('');
     }
 }

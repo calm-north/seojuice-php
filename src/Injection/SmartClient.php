@@ -19,7 +19,7 @@ final class SmartClient
         $this->client = $guzzleClient ?? new Client([
             'base_uri' => $config->smartUrl . '/',
             'timeout' => $config->timeout,
-            'connect_timeout' => 10,
+            'connect_timeout' => $config->connectTimeout,
             'headers' => [
                 'User-Agent' => $config->userAgent,
                 'Accept' => 'application/json',

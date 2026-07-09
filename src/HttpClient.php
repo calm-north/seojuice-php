@@ -25,9 +25,14 @@ class HttpClient
         Config $config,
         ?Client $guzzleClient = null,
     ) {
+        if ($apiKey === '') {
+            throw new ValidationException('apiKey must not be empty', 'invalid_config');
+        }
+
         $this->config = $config;
         $this->client = $guzzleClient ?? new Client([
             'timeout' => $config->timeout,
+            'connect_timeout' => $config->connectTimeout,
             'headers' => [
                 'User-Agent' => $config->userAgent,
                 'Accept' => 'application/json',

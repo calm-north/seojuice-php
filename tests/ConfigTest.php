@@ -6,6 +6,7 @@ namespace SEOJuice\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SEOJuice\Config;
+use SEOJuice\Exceptions\ValidationException;
 
 final class ConfigTest extends TestCase
 {
@@ -67,5 +68,26 @@ final class ConfigTest extends TestCase
         $config = new Config(baseUrl: 'https://api.example.com/v2');
 
         $this->assertSame('https://api.example.com/v2', $config->baseUrl);
+    }
+
+    public function testNegativeTimeoutIsRejected(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        new Config(timeout: -1);
+    }
+
+    public function testZeroTimeoutIsRejected(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        new Config(timeout: 0);
+    }
+
+    public function testConnectTimeoutDefaultsToTen(): void
+    {
+        $config = new Config();
+
+        $this->assertSame(10, $config->connectTimeout);
     }
 }
