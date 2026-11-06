@@ -22,13 +22,36 @@ final class Transformer
         return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
     }
 
+    // Next.js optimizer: the image is the `url` param, not the endpoint.
+    private static function unwrapNextImageUrl(string $url): string
+    {
+        $parts = parse_url(str_starts_with($url, '//') ? 'http:' . $url : $url);
+        if ($parts === false || ($parts['path'] ?? '') !== '/_next/image') {
+            return $url;
+        }
+
+        parse_str($parts['query'] ?? '', $query);
+        $original = $query['url'] ?? null;
+        if (!is_string($original) || $original === '') {
+            return $url;
+        }
+
+        if (!isset($parts['host']) || preg_match('#^[a-z][a-z0-9+.-]*:|^//#i', $original) === 1) {
+            return $original;
+        }
+
+        $origin = (str_starts_with($url, '//') ? '' : ($parts['scheme'] . ':')) . '//' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
+
+        return str_starts_with($original, '/') ? $origin . $original : $url;
+    }
+
     public static function normalizeImageUrl(string $url): string
     {
         if ($url === '') {
             return '';
         }
 
-        $url = explode('?', $url)[0];
+        $url = explode('?', self::unwrapNextImageUrl($url))[0];
 
         if (str_starts_with($url, 'https:')) {
             return substr($url, 6);

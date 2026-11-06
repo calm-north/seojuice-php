@@ -25,6 +25,18 @@ final class TransformerTest extends TestCase
         $this->assertSame('//x.com/a.png', Transformer::normalizeImageUrl('http://x.com/a.png'));
     }
 
+    public function testNormalizeImageUrlKeysNextOptimizerUrlsOnTheOriginalImage(): void
+    {
+        $k = static fn (string $u): string => Transformer::normalizeImageUrl($u);
+        $this->assertSame('//x.com/a.jpg', $k('https://x.com/_next/image?url=%2Fa.jpg&w=640&q=75'));
+        $this->assertSame($k('https://x.com/_next/image?url=%2Fa.jpg&w=640'), $k('https://x.com/_next/image?url=%2Fa.jpg&w=1080'));
+        $this->assertNotSame($k('https://x.com/_next/image?url=%2Fa.jpg'), $k('https://x.com/_next/image?url=%2Fb.jpg'));
+        $this->assertSame('//cdn.y.com/a.jpg', $k('//x.com/_next/image?url=https%3A%2F%2Fcdn.y.com%2Fa.jpg&w=640'));
+        $this->assertSame('//x.com/_next/image', $k('https://x.com/_next/image?w=640'));
+        // nested optimizer URL: unwrap once, never recurse
+        $this->assertSame('//x.com/_next/image', $k('https://x.com/_next/image?url=%2F_next%2Fimage%3Furl%3D%252Fa.jpg%26w%3D640&w=640'));
+    }
+
     public function testNormalizeImageUrlReturnsEmptyStringForEmptyInput(): void
     {
         $this->assertSame('', Transformer::normalizeImageUrl(''));
