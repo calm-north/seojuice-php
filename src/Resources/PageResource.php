@@ -19,12 +19,13 @@ final class PageResource
     ) {
     }
 
-    public function list(int $page = 1, int $pageSize = 10): PaginatedResult
+    public function list(int $page = 1, int $pageSize = 10, ?string $url = null): PaginatedResult
     {
-        $data = $this->http->get("websites/{$this->domain}/pages/", [
-            'page' => $page,
-            'page_size' => $pageSize,
-        ]);
+        $query = ['page' => $page, 'page_size' => $pageSize];
+        if ($url !== null) {
+            $query['url'] = $url;
+        }
+        $data = $this->http->get("websites/{$this->domain}/pages/", $query);
 
         return PaginatedResult::fromArray($data, fn (array $item) => Page::fromArray($item));
     }
@@ -46,22 +47,30 @@ final class PageResource
         return PaginatedResult::fromArray($data, fn (array $item) => PageKeyword::fromArray($item));
     }
 
-    public function searchStats(string $pageId, int $page = 1, int $pageSize = 10): PaginatedResult
+    /**
+     * @param string|null $period 7d, 30d or 90d; the server defaults to 30d (search stats) and 90d (metrics history)
+     */
+    public function searchStats(string $pageId, int $page = 1, int $pageSize = 10, ?string $period = null): PaginatedResult
     {
-        $data = $this->http->get("websites/{$this->domain}/pages/{$pageId}/search-stats/", [
-            'page' => $page,
-            'page_size' => $pageSize,
-        ]);
+        $query = ['page' => $page, 'page_size' => $pageSize];
+        if ($period !== null) {
+            $query['period'] = $period;
+        }
+        $data = $this->http->get("websites/{$this->domain}/pages/{$pageId}/search-stats/", $query);
 
         return PaginatedResult::fromArray($data, fn (array $item) => SearchStats::fromArray($item));
     }
 
-    public function metricsHistory(string $pageId, int $page = 1, int $pageSize = 10): PaginatedResult
+    /**
+     * @param string|null $period 7d, 30d or 90d; the server defaults to 30d (search stats) and 90d (metrics history)
+     */
+    public function metricsHistory(string $pageId, int $page = 1, int $pageSize = 10, ?string $period = null): PaginatedResult
     {
-        $data = $this->http->get("websites/{$this->domain}/pages/{$pageId}/metrics-history/", [
-            'page' => $page,
-            'page_size' => $pageSize,
-        ]);
+        $query = ['page' => $page, 'page_size' => $pageSize];
+        if ($period !== null) {
+            $query['period'] = $period;
+        }
+        $data = $this->http->get("websites/{$this->domain}/pages/{$pageId}/metrics-history/", $query);
 
         return PaginatedResult::fromArray($data, fn (array $item) => MetricsHistory::fromArray($item));
     }
@@ -77,16 +86,20 @@ final class PageResource
     /**
      * @return array<string, mixed>
      */
-    public function contentQuality(string $pageId): array
+    public function contentQuality(string $pageId, bool $fullAudit = false): array
     {
-        return $this->http->get("websites/{$this->domain}/pages/{$pageId}/content-quality/");
+        return $this->http->get("websites/{$this->domain}/pages/{$pageId}/content-quality/", [
+            'full_audit' => $fullAudit ? 'true' : null,
+        ]);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function geoReadiness(string $pageId): array
+    public function geoReadiness(string $pageId, bool $fullAudit = false): array
     {
-        return $this->http->get("websites/{$this->domain}/pages/{$pageId}/geo-readiness/");
+        return $this->http->get("websites/{$this->domain}/pages/{$pageId}/geo-readiness/", [
+            'full_audit' => $fullAudit ? 'true' : null,
+        ]);
     }
 }

@@ -9,7 +9,6 @@ final class ActionItemSummary
     public readonly int $total;
     public readonly int $open;
     public readonly int $done;
-    public readonly int $snoozed;
     public readonly int $dismissed;
     public readonly int $autoFixed;
     public readonly int $doneThisMonth;
@@ -18,6 +17,8 @@ final class ActionItemSummary
     public readonly array $byCategory;
     /** @var array<string, int> */
     public readonly array $byPriority;
+    public readonly int $resolved;
+    public readonly int $retired;
 
     /**
      * @param array<string, int> $byCategory
@@ -27,24 +28,26 @@ final class ActionItemSummary
         int $total,
         int $open,
         int $done,
-        int $snoozed,
         int $dismissed,
         int $autoFixed,
         int $doneThisMonth,
         float $completionRate,
         array $byCategory,
         array $byPriority,
+        int $resolved = 0,
+        int $retired = 0,
     ) {
         $this->total = $total;
         $this->open = $open;
         $this->done = $done;
-        $this->snoozed = $snoozed;
         $this->dismissed = $dismissed;
         $this->autoFixed = $autoFixed;
         $this->doneThisMonth = $doneThisMonth;
         $this->completionRate = $completionRate;
         $this->byCategory = $byCategory;
         $this->byPriority = $byPriority;
+        $this->resolved = $resolved;
+        $this->retired = $retired;
     }
 
     /**
@@ -56,13 +59,14 @@ final class ActionItemSummary
             total: (int) ($data['total'] ?? 0),
             open: (int) ($data['open'] ?? 0),
             done: (int) ($data['done'] ?? 0),
-            snoozed: (int) ($data['snoozed'] ?? 0),
             dismissed: (int) ($data['dismissed'] ?? 0),
             autoFixed: (int) ($data['auto_fixed'] ?? 0),
             doneThisMonth: (int) ($data['done_this_month'] ?? 0),
             completionRate: (float) ($data['completion_rate'] ?? 0.0),
             byCategory: $data['by_category'] ?? [],
             byPriority: $data['by_priority'] ?? [],
+            resolved: (int) ($data['resolved'] ?? 0),
+            retired: (int) ($data['retired'] ?? 0),
         );
     }
 }

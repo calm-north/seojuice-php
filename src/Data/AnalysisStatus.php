@@ -51,7 +51,7 @@ final class AnalysisStatus
 
     public function isPending(): bool
     {
-        return $this->status === 'pending' || $this->status === 'processing';
+        return $this->status === 'queued' || $this->status === 'in_progress';
     }
 
     /**
@@ -59,6 +59,12 @@ final class AnalysisStatus
      */
     public static function fromArray(array $data): self
     {
+        // The server merges the analysis result into the top level of the response.
+        $result = array_diff_key($data, array_flip([
+            'analysis_id', 'status', 'url', 'status_url', 'estimated_time_seconds',
+            'completed_at', 'error_message',
+        ]));
+
         return new self(
             analysisId: (string) ($data['analysis_id'] ?? ''),
             status: (string) ($data['status'] ?? ''),
@@ -67,7 +73,7 @@ final class AnalysisStatus
             estimatedTimeSeconds: isset($data['estimated_time_seconds']) ? (int) $data['estimated_time_seconds'] : null,
             completedAt: $data['completed_at'] ?? null,
             errorMessage: $data['error_message'] ?? null,
-            result: $data['result'] ?? [],
+            result: $result,
         );
     }
 }

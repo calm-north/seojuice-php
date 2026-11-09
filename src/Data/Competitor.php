@@ -9,10 +9,10 @@ final class Competitor
     public readonly int $id;
     public readonly string $domain;
     public readonly float $score;
-    public readonly int $intersections;
-    public readonly int $estimatedTraffic;
+    public readonly ?int $intersections;
+    public readonly ?int $estimatedTraffic;
     public readonly int $contentGapsCount;
-    public readonly float $avgPosition;
+    public readonly ?float $avgPosition;
     /** @var array<int, mixed> */
     public readonly array $topKeywords;
     /** @var array<string, mixed>|null */
@@ -26,10 +26,10 @@ final class Competitor
         int $id,
         string $domain,
         float $score,
-        int $intersections,
-        int $estimatedTraffic,
+        ?int $intersections,
+        ?int $estimatedTraffic,
         int $contentGapsCount,
-        float $avgPosition,
+        ?float $avgPosition,
         array $topKeywords,
         ?array $trends,
     ) {
@@ -53,10 +53,10 @@ final class Competitor
             id: (int) $data['id'],
             domain: (string) $data['domain'],
             score: (float) ($data['score'] ?? 0),
-            intersections: (int) ($data['intersections'] ?? 0),
-            estimatedTraffic: (int) ($data['estimated_traffic'] ?? 0),
+            intersections: isset($data['intersections']) ? (int) $data['intersections'] : null,
+            estimatedTraffic: isset($data['estimated_traffic']) ? (int) $data['estimated_traffic'] : null,
             contentGapsCount: (int) ($data['content_gaps_count'] ?? 0),
-            avgPosition: (float) ($data['avg_position'] ?? 0),
+            avgPosition: isset($data['avg_position']) ? (float) $data['avg_position'] : null,
             topKeywords: $data['top_keywords'] ?? [],
             trends: $data['trends'] ?? null,
         );

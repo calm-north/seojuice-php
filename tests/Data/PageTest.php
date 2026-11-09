@@ -89,7 +89,7 @@ final class PageTest extends TestCase
         $this->assertNull($page->ogDescription);
         $this->assertNull($page->ogImage);
         $this->assertSame([], $page->readability);
-        $this->assertSame([], $page->structuredData);
+        $this->assertNull($page->structuredData);
         $this->assertSame([], $page->links);
         $this->assertNull($page->createdAt);
         $this->assertNull($page->lastProcessedAt);

@@ -21,17 +21,14 @@ final class SeoInjectorTest extends TestCase
         return "<html><head>{$headContent}</head><body>{$bodyContent}</body></html>";
     }
 
-    public function testInjectSkipsContentButStillEmitsSsrFlagWhenValidationFails(): void
+    /** seojuice-ssr.js:63-70: an API payload with errors returns the origin page untouched. */
+    public function testInjectReturnsOriginUntouchedWhenPayloadCarriesErrors(): void
     {
         $html = $this->makeHtml();
 
         $result = $this->injector->inject($html, ['errors' => ['boom'], 'title' => 'Should Not Appear']);
 
-        // C1 gates only the content-mutating transforms — the SSR flag is always
-        // emitted (matches node/python + the Worker), so the output is NOT the
-        // original, but the title/content transforms did not run.
-        $this->assertStringNotContainsString('Should Not Appear', $result);
-        $this->assertStringContainsString('window.seojuiceSSR = true;', $result);
+        $this->assertSame($html, $result);
     }
 
     public function testInjectSkipsContentButStillEmitsSsrFlagWhenNothingActionable(): void
@@ -116,15 +113,14 @@ final class SeoInjectorTest extends TestCase
         $this->assertStringContainsString('<h1 data-seojuice="h1">New Heading</h1>', $result);
     }
 
-    public function testInjectH1OnlyPayloadIsContentNoOpButEmitsSsrFlag(): void
+    public function testInjectH1OnlyPayloadReplacesTheHeading(): void
     {
         $html = $this->makeHtml('', '<h1>Old Heading</h1><p>Body content long enough to survive the fail-open ratio check.</p>');
 
         $result = $this->injector->inject($html, ['h1' => 'New Heading']);
 
-        // h1-only payload flips C1 false: heading is left untouched, SSR flag still emitted.
-        $this->assertStringContainsString('<h1>Old Heading</h1>', $result);
-        $this->assertStringNotContainsString('New Heading', $result);
+        $this->assertStringContainsString('<h1 data-seojuice="h1">New Heading</h1>', $result);
+        $this->assertStringNotContainsString('Old Heading', $result);
         $this->assertStringContainsString('window.seojuiceSSR = true;', $result);
     }
 

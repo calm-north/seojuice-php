@@ -149,7 +149,7 @@ foreach ($result->results as $cluster) {
 // Get cluster details
 $detail = $clusters->get(42);
 echo $detail->name;
-print_r($detail->topKeywords);
+print_r($detail->topQueries);
 print_r($detail->timeSeries);
 ```
 
@@ -380,7 +380,7 @@ foreach ($result->results as $change) {
 $change = $changes->get(42);
 
 // Approve / reject / revert
-$changes->approve(42);
+$changes->approve(42);                       // approve(42, confirmHeading: true) for h1 changes
 $changes->reject(43, reason: 'Not aligned with brand voice');
 $changes->revert(44, reason: 'Caused ranking drop');
 
@@ -425,17 +425,18 @@ foreach ($result->results as $item) {
 // Get grouped by category
 $groups = $actions->groups();
 foreach ($groups->results as $group) {
-    echo "{$group->category}: {$group->count} items";
+    echo "{$group->category}: {$group->totalItems} items";
 }
 
 // Create and update
-$actions->create(
-    title: 'Fix missing alt tags on product images',
-    priority: 'high',
-    category: 'accessibility',
-);
+$actions->create([
+    'title' => 'Fix missing alt tags on product images',
+    'priority' => 'high',
+    'category' => 'accessibility',
+]);
 
-$actions->update(id: 99, status: 'completed');
+// Actions: done, in_progress, dismiss, reopen
+$actions->update(itemId: 99, action: 'done');
 ```
 
 ### Domain Health

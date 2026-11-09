@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SEOJuice\Data;
 
+use SEOJuice\Enums\ChangeStatus;
+use SEOJuice\Enums\ChangeType;
+
 final class ChangeRecord
 {
     public readonly int $id;
@@ -41,6 +44,11 @@ final class ChangeRecord
     public readonly ?string $batchId;
     public readonly ?string $batchLabel;
     public readonly bool $editedManually;
+    public readonly ?string $mutationType;
+    public readonly ?string $verificationState;
+    public readonly ?string $outcomeState;
+    /** @var array<string, mixed>|null */
+    public readonly ?array $apply;
 
     /**
      * @param array<int, mixed> $alternatives
@@ -50,6 +58,7 @@ final class ChangeRecord
      * @param array<int, mixed> $potentialRisks
      * @param array<int, mixed> $relatedChanges
      * @param array<string, mixed> $llmMetadata
+     * @param array<string, mixed>|null $apply
      */
     public function __construct(
         int $id,
@@ -80,6 +89,10 @@ final class ChangeRecord
         ?string $batchId,
         ?string $batchLabel,
         bool $editedManually,
+        ?string $mutationType = null,
+        ?string $verificationState = null,
+        ?string $outcomeState = null,
+        ?array $apply = null,
     ) {
         $this->id = $id;
         $this->changeType = $changeType;
@@ -109,6 +122,22 @@ final class ChangeRecord
         $this->batchId = $batchId;
         $this->batchLabel = $batchLabel;
         $this->editedManually = $editedManually;
+        $this->mutationType = $mutationType;
+        $this->verificationState = $verificationState;
+        $this->outcomeState = $outcomeState;
+        $this->apply = $apply;
+    }
+
+    /** Null for a status this SDK version does not know. */
+    public function statusEnum(): ?ChangeStatus
+    {
+        return ChangeStatus::tryFrom($this->status);
+    }
+
+    /** Null for a change type this SDK version does not know. */
+    public function changeTypeEnum(): ?ChangeType
+    {
+        return ChangeType::tryFrom($this->changeType);
     }
 
     /**
@@ -145,6 +174,10 @@ final class ChangeRecord
             batchId: $data['batch_id'] ?? null,
             batchLabel: $data['batch_label'] ?? null,
             editedManually: (bool) ($data['edited_manually'] ?? false),
+            mutationType: $data['mutation_type'] ?? null,
+            verificationState: $data['verification_state'] ?? null,
+            outcomeState: $data['outcome_state'] ?? null,
+            apply: $data['apply'] ?? null,
         );
     }
 }

@@ -17,8 +17,10 @@ final class SerpLandscapeResource
     /**
      * @return array<string, mixed>
      */
-    public function get(): array
+    public function get(?string $market = null): array
     {
-        return $this->http->get("websites/{$this->domain}/serp-landscape/");
+        return $this->http->get("websites/{$this->domain}/serp-landscape/", [
+            'market' => $market,
+        ]);
     }
 }
