@@ -8,7 +8,7 @@ use SEOJuice\Exceptions\ValidationException;
 
 final class Config
 {
-    public const VERSION = '1.4.2';
+    public const VERSION = '1.5.0';
 
     public readonly string $baseUrl;
     public readonly string $smartUrl;

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.5.0
+
+### Breaking
+- **`ChangeResource::reject()` requires a reason.** The server rejects a change without one.
+- **Data classes match the server.** Properties the server never sends are removed, for example `ActionItemGroup::$count`, `ActionItemSummary::$snoozed` and `ClusterSummary::$totalClicks`. Renamed: `ClusterDetail::$topKeywords` to `$topQueries`, `ContentDecayAlert::$positionChangePct` to `$positionChange`.
+- **Injected JSON-LD is a bare array of only the missing `@type`s.** Types already on the page are not added twice.
+
+### Added
+- **`approve($id, confirmHeading: true)`** for H1 changes, and **`batchId`** on change listing and bulk actions.
+- **`PaymentRequiredException`** for 402 responses, with the checkout URL and lock state.
+- **`ChangeStatus` and `ChangeType` enums.**
+
+### Fixed
+- **Status filters accept `proposed`, `live` and `rolled_back`.**
+- **Errors read the server's `error` code.**
+- **Links keep the page's text casing, and pages with an `errors` payload stay untouched.**
+- **Images match on relative URLs and `srcset`.**
+
 ## 1.4.2
 
 ### Fixed
