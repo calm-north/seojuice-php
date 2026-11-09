@@ -22,16 +22,27 @@ final class Page
     /** @var array<string, mixed> */
     public readonly array $readability;
     /** @var array<string, mixed> */
-    public readonly array $structuredData;
+    public readonly ?array $structuredData;
     /** @var array<int, Link> */
     public readonly array $links;
     public readonly ?string $createdAt;
     public readonly ?string $lastProcessedAt;
+    public readonly ?float $contentQualityScore;
+    public readonly ?float $geoReadinessScore;
+    public readonly bool $excluded;
+    public readonly bool $isKeyPage;
+    public readonly bool $hasStructuredData;
+    /** @var array<string, mixed>|null */
+    public readonly ?array $contentQualityBreakdown;
+    /** @var array<string, mixed>|null */
+    public readonly ?array $geoReadinessBreakdown;
 
     /**
      * @param array<string, mixed> $readability
      * @param array<string, mixed> $structuredData
      * @param array<int, Link> $links
+     * @param array<string, mixed>|null $contentQualityBreakdown
+     * @param array<string, mixed>|null $geoReadinessBreakdown
      */
     public function __construct(
         int $id,
@@ -48,10 +59,17 @@ final class Page
         ?string $ogDescription,
         ?string $ogImage,
         array $readability,
-        array $structuredData,
+        ?array $structuredData,
         array $links,
         ?string $createdAt,
         ?string $lastProcessedAt,
+        ?float $contentQualityScore = null,
+        ?float $geoReadinessScore = null,
+        bool $excluded = false,
+        bool $isKeyPage = false,
+        bool $hasStructuredData = false,
+        ?array $contentQualityBreakdown = null,
+        ?array $geoReadinessBreakdown = null,
     ) {
         $this->id = $id;
         $this->url = $url;
@@ -71,6 +89,13 @@ final class Page
         $this->links = $links;
         $this->createdAt = $createdAt;
         $this->lastProcessedAt = $lastProcessedAt;
+        $this->contentQualityScore = $contentQualityScore;
+        $this->geoReadinessScore = $geoReadinessScore;
+        $this->excluded = $excluded;
+        $this->isKeyPage = $isKeyPage;
+        $this->hasStructuredData = $hasStructuredData;
+        $this->contentQualityBreakdown = $contentQualityBreakdown;
+        $this->geoReadinessBreakdown = $geoReadinessBreakdown;
     }
 
     /**
@@ -83,6 +108,7 @@ final class Page
             fn (array $link) => Link::fromArray($link),
             $linksData,
         );
+
 
         return new self(
             id: (int) $data['id'],
@@ -99,10 +125,17 @@ final class Page
             ogDescription: $data['og_description'] ?? null,
             ogImage: $data['og_image'] ?? null,
             readability: $data['readability'] ?? [],
-            structuredData: $data['structured_data'] ?? [],
+            structuredData: $data['structured_data'] ?? null,
             links: $links,
             createdAt: $data['created_at'] ?? null,
             lastProcessedAt: $data['last_processed_at'] ?? null,
+            contentQualityScore: isset($data['content_quality_score']) ? (float) $data['content_quality_score'] : null,
+            geoReadinessScore: isset($data['geo_readiness_score']) ? (float) $data['geo_readiness_score'] : null,
+            excluded: (bool) ($data['excluded'] ?? false),
+            isKeyPage: (bool) ($data['is_key_page'] ?? false),
+            hasStructuredData: (bool) ($data['has_structured_data'] ?? false),
+            contentQualityBreakdown: $data['content_quality_breakdown'] ?? null,
+            geoReadinessBreakdown: $data['geo_readiness_breakdown'] ?? null,
         );
     }
 }

@@ -17,7 +17,7 @@ final class ConfigTest extends TestCase
         $this->assertSame('https://seojuice.com/api/v2', $config->baseUrl);
         $this->assertSame('https://smart.seojuice.io', $config->smartUrl);
         $this->assertSame(30, $config->timeout);
-        $this->assertSame('seojuice-php/1.0', $config->userAgent);
+        $this->assertSame('seojuice-php/' . Config::VERSION, $config->userAgent);
     }
 
     public function testCustomValuesAreAccepted(): void

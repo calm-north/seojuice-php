@@ -17,6 +17,10 @@ final class ContentGap
     public readonly bool $aisoDriven;
     public readonly bool $isGenerated;
     public readonly bool $hasPotentialCandidate;
+    public readonly ?float $relevance;
+    public readonly ?int $estimatedTrafficPotential;
+    public readonly bool $isDismissed;
+    public readonly ?string $createdAt;
 
     /**
      * @param array<int, mixed> $keywords
@@ -32,6 +36,10 @@ final class ContentGap
         bool $aisoDriven,
         bool $isGenerated,
         bool $hasPotentialCandidate,
+        ?float $relevance = null,
+        ?int $estimatedTrafficPotential = null,
+        bool $isDismissed = false,
+        ?string $createdAt = null,
     ) {
         $this->id = $id;
         $this->pageName = $pageName;
@@ -43,6 +51,10 @@ final class ContentGap
         $this->aisoDriven = $aisoDriven;
         $this->isGenerated = $isGenerated;
         $this->hasPotentialCandidate = $hasPotentialCandidate;
+        $this->relevance = $relevance;
+        $this->estimatedTrafficPotential = $estimatedTrafficPotential;
+        $this->isDismissed = $isDismissed;
+        $this->createdAt = $createdAt;
     }
 
     /**
@@ -61,6 +73,10 @@ final class ContentGap
             aisoDriven: (bool) ($data['aiso_driven'] ?? false),
             isGenerated: (bool) ($data['is_generated'] ?? false),
             hasPotentialCandidate: (bool) ($data['has_potential_candidate'] ?? false),
+            relevance: isset($data['relevance']) ? (float) $data['relevance'] : null,
+            estimatedTrafficPotential: isset($data['estimated_traffic_potential']) ? (int) $data['estimated_traffic_potential'] : null,
+            isDismissed: (bool) ($data['is_dismissed'] ?? false),
+            createdAt: $data['created_at'] ?? null,
         );
     }
 }

@@ -20,11 +20,13 @@ final class KeywordResource
         ?string $category = null,
         int $page = 1,
         int $pageSize = 10,
+        bool $includeSerp = false,
     ): PaginatedResult {
         $data = $this->http->get("websites/{$this->domain}/keywords/", [
             'category' => $category,
             'page' => $page,
             'page_size' => $pageSize,
+            'include_serp' => $includeSerp ? 'true' : null,
         ]);
 
         return PaginatedResult::fromArray($data, fn (array $item) => Keyword::fromArray($item));

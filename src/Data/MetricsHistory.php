@@ -22,6 +22,11 @@ final class MetricsHistory
     public readonly ?float $cwvCls;
     public readonly ?float $cwvFid;
     public readonly ?float $cwvPerformanceScore;
+    public readonly ?float $cwvInp;
+    public readonly ?float $cwvFcp;
+    public readonly ?float $cwvTtfb;
+    public readonly ?float $contentQualityScore;
+    public readonly ?float $geoReadinessScore;
 
     public function __construct(
         ?string $createdAt,
@@ -40,6 +45,11 @@ final class MetricsHistory
         ?float $cwvCls,
         ?float $cwvFid,
         ?float $cwvPerformanceScore,
+        ?float $cwvInp = null,
+        ?float $cwvFcp = null,
+        ?float $cwvTtfb = null,
+        ?float $contentQualityScore = null,
+        ?float $geoReadinessScore = null,
     ) {
         $this->createdAt = $createdAt;
         $this->seoScore = $seoScore;
@@ -57,6 +67,11 @@ final class MetricsHistory
         $this->cwvCls = $cwvCls;
         $this->cwvFid = $cwvFid;
         $this->cwvPerformanceScore = $cwvPerformanceScore;
+        $this->cwvInp = $cwvInp;
+        $this->cwvFcp = $cwvFcp;
+        $this->cwvTtfb = $cwvTtfb;
+        $this->contentQualityScore = $contentQualityScore;
+        $this->geoReadinessScore = $geoReadinessScore;
     }
 
     /**
@@ -81,6 +96,11 @@ final class MetricsHistory
             cwvCls: isset($data['cwv_cls']) ? (float) $data['cwv_cls'] : null,
             cwvFid: isset($data['cwv_fid']) ? (float) $data['cwv_fid'] : null,
             cwvPerformanceScore: isset($data['cwv_performance_score']) ? (float) $data['cwv_performance_score'] : null,
+            cwvInp: isset($data['cwv_inp']) ? (float) $data['cwv_inp'] : null,
+            cwvFcp: isset($data['cwv_fcp']) ? (float) $data['cwv_fcp'] : null,
+            cwvTtfb: isset($data['cwv_ttfb']) ? (float) $data['cwv_ttfb'] : null,
+            contentQualityScore: isset($data['content_quality_score']) ? (float) $data['content_quality_score'] : null,
+            geoReadinessScore: isset($data['geo_readiness_score']) ? (float) $data['geo_readiness_score'] : null,
         );
     }
 }

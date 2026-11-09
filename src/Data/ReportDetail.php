@@ -6,15 +6,13 @@ namespace SEOJuice\Data;
 
 final class ReportDetail extends ReportSummary
 {
-    /** @var array<string, mixed>|null */
-    public readonly ?array $summary;
+    public readonly ?string $summary;
     /** @var array<string, mixed>|null */
     public readonly ?array $data;
     public readonly ?string $updatedAt;
     public readonly ?string $pdfUrl;
 
     /**
-     * @param array<string, mixed>|null $summary
      * @param array<string, mixed>|null $data
      */
     public function __construct(
@@ -26,7 +24,7 @@ final class ReportDetail extends ReportSummary
         ?string $endDate,
         ?string $createdAt,
         bool $hasPdf,
-        ?array $summary,
+        ?string $summary,
         ?array $data,
         ?string $updatedAt,
         ?string $pdfUrl,
@@ -52,7 +50,7 @@ final class ReportDetail extends ReportSummary
             endDate: $data['end_date'] ?? null,
             createdAt: $data['created_at'] ?? null,
             hasPdf: (bool) ($data['has_pdf'] ?? false),
-            summary: $data['summary'] ?? null,
+            summary: isset($data['summary']) ? (string) $data['summary'] : null,
             data: $data['data'] ?? null,
             updatedAt: $data['updated_at'] ?? null,
             pdfUrl: $data['pdf_url'] ?? null,

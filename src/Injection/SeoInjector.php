@@ -27,6 +27,11 @@ final class SeoInjector
         $original = $html;
         $manifest = ['cs' => [], 'meta' => [], 'img' => 0, 'schema' => 0, 'h1' => 0];
 
+        // Worker: an API payload carrying errors returns the origin page untouched.
+        if (!empty($data['errors'])) {
+            return $original;
+        }
+
         try {
             if (Transformer::validateApiResponse($data)) {
                 $html = Transformer::replaceMetaTags($html, $data, $manifest);

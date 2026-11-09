@@ -13,9 +13,12 @@ enum ChangeType: string
     case OgDescription = 'og_description';
     case OgImage = 'og_image';
     case TitleTag = 'title_tag';
+    case H1Tag = 'h1_tag';
     case StructuredData = 'structured_data';
     case ImageAlt = 'image_alt';
     case Accessibility = 'accessibility';
     case LocalSchema = 'local_schema';
     case NapFix = 'nap_fix';
+    case BrokenLinkFix = 'broken_link_fix';
+    case ContentPatch = 'content_patch';
 }

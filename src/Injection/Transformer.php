@@ -175,36 +175,186 @@ final class Transformer
         }
 
         if ($structuredData !== '' && $structuredData !== 'null') {
-            // Defensive single-or-double decode: the real /suggestions payload
-            // (build_page_suggestions_payload) serializes structured_data as a
-            // SINGLE json.dumps(dict) — a JSON string of the object. A legacy
-            // caller may still send it double-encoded (a JSON string containing
-            // an inner JSON string). Decode once; if the result is still a
-            // string, decode again. Either shape must produce byte-identical
-            // injected JSON-LD.
-            $obj = json_decode($structuredData, true);
+            // Mirrors seojuice-ssr.js replaceMetaTags (structured_data block).
+            // Decode once; if the result is still a string (legacy double
+            // encoding) decode again. Objects stay stdClass so an empty `{}`
+            // round-trips as `{}`. An unparsable payload injects nothing.
+            $obj = json_decode($structuredData);
             if (is_string($obj)) {
-                $obj = json_decode($obj, true);
+                $obj = json_decode($obj);
             }
 
-            if (is_array($obj) && !preg_match('/<script[^>]*type=["\']application\/ld\+json["\'][^>]*>/i', $html)) {
-                // json_decode(..., true) turns both `{}` and `[]` into a PHP `[]`,
-                // so a genuinely empty *object* schema would re-encode as `[]`,
-                // diverging from node/python which preserve `{}`. Force the
-                // empty-array case back to an object so it round-trips as `{}`.
-                $json = $obj === []
-                    ? '{}'
-                    : json_encode($obj, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-                $html = self::replaceFirstLiteral(
-                    '/<\/head>/i',
-                    '<script type="application/ld+json" data-seojuice="schema">' . $json . "</script>\n</head>",
-                    $html,
-                );
-                $manifest['schema'] = 1;
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $nodes = self::normalizeSchemaNodes($obj);
+                // Tagged scripts are ours: replace, never append.
+                $html = self::stripOwnLdJson($html);
+                $present = self::collectPresentLdJsonTypes($html);
+                $missing = array_values(array_filter(
+                    $nodes,
+                    fn ($node) => !self::ldJsonNodeAlreadyPresent($node, $present),
+                ));
+
+                if ($missing !== []) {
+                    $json = str_replace(
+                        '<',
+                        '\\u003c',
+                        (string) json_encode($missing, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    );
+                    $html = self::replaceFirstLiteral(
+                        '/<\/head>/i',
+                        '<script type="application/ld+json" data-seojuice="schema">' . $json . "</script>\n</head>",
+                        $html,
+                    );
+                    $manifest['schema'] = 1;
+                }
             }
         }
 
         return $html;
+    }
+
+    /**
+     * Gap-fill dedup type coverage (seojuice-ssr.js SCHEMA_COVERS): a proposed
+     * type is redundant when any covering type is already on the page.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const SCHEMA_COVERS = [
+        'Article' => ['Article', 'BlogPosting', 'NewsArticle', 'TechArticle', 'ScholarlyArticle', 'Report'],
+        'WebPage' => [
+            'WebPage', 'CollectionPage', 'AboutPage', 'ContactPage', 'ItemPage', 'ProfilePage', 'FAQPage', 'QAPage',
+            'SearchResultsPage', 'CheckoutPage', 'MedicalWebPage', 'RealEstateListing',
+        ],
+        'Organization' => [
+            'Organization', 'Corporation', 'NGO', 'EducationalOrganization', 'School', 'CollegeOrUniversity',
+            'ElementarySchool', 'HighSchool', 'MiddleSchool', 'Preschool', 'GovernmentOrganization',
+            'NewsMediaOrganization', 'MedicalOrganization', 'ResearchOrganization', 'SportsOrganization',
+            'SportsTeam', 'PerformingGroup', 'OnlineBusiness', 'OnlineStore', 'Airline', 'Consortium',
+            'LibrarySystem', 'WorkersUnion', 'LocalBusiness', 'AccountingService', 'AutomotiveBusiness',
+            'AutoDealer', 'AutoRepair', 'Dentist', 'EmergencyService', 'EntertainmentBusiness', 'FinancialService',
+            'FoodEstablishment', 'Bakery', 'BarOrPub', 'CafeOrCoffeeShop', 'Restaurant', 'GovernmentOffice',
+            'HealthAndBeautyBusiness', 'BeautySalon', 'DaySpa', 'HairSalon', 'HomeAndConstructionBusiness',
+            'Electrician', 'GeneralContractor', 'Plumber', 'InternetCafe', 'LegalService', 'Attorney', 'Notary',
+            'LodgingBusiness', 'Hotel', 'Hostel', 'Motel', 'MedicalBusiness', 'Pharmacy', 'Physician',
+            'ProfessionalService', 'RealEstateAgent', 'RecyclingCenter', 'SelfStorage', 'ShoppingCenter',
+            'SportsActivityLocation', 'Store', 'TouristInformationCenter', 'TravelAgency', 'Person',
+        ],
+    ];
+
+    /**
+     * A bare list is used as-is, `{"@graph": [...]}` is unwrapped, anything
+     * else becomes a one-element list.
+     *
+     * @return array<int, mixed>
+     */
+    private static function normalizeSchemaNodes(mixed $obj): array
+    {
+        if (is_array($obj)) {
+            return array_values($obj);
+        }
+        if ($obj instanceof \stdClass && isset($obj->{'@graph'}) && is_array($obj->{'@graph'})) {
+            return array_values($obj->{'@graph'});
+        }
+
+        return [$obj];
+    }
+
+    /** Removes the script blocks tagged data-seojuice (ours), keeps the site's. */
+    private static function stripOwnLdJson(string $html): string
+    {
+        return (string) preg_replace_callback(
+            '/<script([^>]*type=["\']application\/ld\+json["\'][^>]*)>[\s\S]*?<\/script>\n?/i',
+            fn (array $m) => preg_match('/\sdata-seojuice(?=[\s=>\/]|\z)/i', $m[1]) === 1 ? '' : $m[0],
+            $html,
+        );
+    }
+
+    /** @return array<string, true> @type values declared by the page's own ld+json blocks. */
+    private static function collectPresentLdJsonTypes(string $html): array
+    {
+        $types = [];
+        preg_match_all('/<script([^>]*type=["\']application\/ld\+json["\'][^>]*)>([\s\S]*?)<\/script>/i', $html, $blocks, PREG_SET_ORDER);
+        foreach ($blocks as $block) {
+            if (preg_match('/\sdata-seojuice(?=[\s=>\/]|\z)/i', $block[1]) === 1) {
+                continue;
+            }
+            $parsed = json_decode($block[2]);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                self::collectLdJsonTypes($parsed, $types);
+            }
+        }
+
+        return $types;
+    }
+
+    /** @param array<string, true> $types */
+    private static function collectLdJsonTypes(mixed $node, array &$types): void
+    {
+        if (is_array($node)) {
+            foreach ($node as $item) {
+                self::collectLdJsonTypes($item, $types);
+            }
+
+            return;
+        }
+        if (!$node instanceof \stdClass) {
+            return;
+        }
+        if (isset($node->{'@graph'}) && is_array($node->{'@graph'})) {
+            foreach ($node->{'@graph'} as $item) {
+                self::collectLdJsonTypes($item, $types);
+            }
+        }
+        $t = $node->{'@type'} ?? null;
+        if (is_string($t)) {
+            $types[$t] = true;
+        } elseif (is_array($t)) {
+            foreach ($t as $tt) {
+                if (is_string($tt)) {
+                    $types[$tt] = true;
+                }
+            }
+        }
+    }
+
+    /**
+     * A node is "already present" only when every one of its @types is covered.
+     * A node without @type is always kept (fail open).
+     *
+     * @param array<string, true> $present
+     */
+    private static function ldJsonNodeAlreadyPresent(mixed $node, array $present): bool
+    {
+        if (!$node instanceof \stdClass) {
+            return false;
+        }
+        $t = $node->{'@type'} ?? null;
+        if (is_string($t)) {
+            return self::isTypeCovered($t, $present);
+        }
+        if (is_array($t) && $t !== []) {
+            foreach ($t as $tt) {
+                if (!is_string($tt) || !self::isTypeCovered($tt, $present)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /** @param array<string, true> $present */
+    private static function isTypeCovered(string $proposed, array $present): bool
+    {
+        foreach (self::SCHEMA_COVERS[$proposed] ?? [$proposed] as $covering) {
+            if (isset($present[$covering])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -219,13 +369,18 @@ final class Transformer
             return $html;
         }
 
+        $base = isset($data['base']) && is_string($data['base']) && $data['base'] !== '' ? $data['base'] : null;
+
         $imageMap = [];
         foreach ($images as $image) {
             $url = (string) ($image['url'] ?? '');
             $altText = (string) ($image['alt_text'] ?? '');
 
             if ($url !== '' && $altText !== '') {
-                $imageMap[self::normalizeImageUrl($url)] = $altText;
+                $key = self::imageMatchKey($url, $base);
+                if ($key !== null) {
+                    $imageMap[$key] = $altText;
+                }
             }
         }
 
@@ -235,17 +390,17 @@ final class Transformer
 
         return (string) preg_replace_callback(
             '/<img([^>]+)>/i',
-            static function (array $matches) use ($imageMap, &$manifest): string {
+            static function (array $matches) use ($imageMap, $base, &$manifest): string {
                 $match = $matches[0];
-                $attributes = $matches[1];
-
-                if (!preg_match('/(?:src|data-src)=["\']([^"\']+)["\']/', $attributes, $srcMatch)) {
-                    return $match;
+                $matchedAlt = null;
+                foreach (self::imageCandidates($matches[1]) as $candidate) {
+                    $key = self::imageMatchKey($candidate, $base);
+                    if ($key !== null && isset($imageMap[$key])) {
+                        $matchedAlt = $imageMap[$key];
+                        break;
+                    }
                 }
-
-                $normalizedSrc = self::normalizeImageUrl($srcMatch[1]);
-
-                if (!isset($imageMap[$normalizedSrc])) {
+                if ($matchedAlt === null) {
                     return $match;
                 }
 
@@ -257,7 +412,7 @@ final class Transformer
                     return $match;
                 }
 
-                $altText = self::escapeHtml($imageMap[$normalizedSrc]);
+                $altText = self::escapeHtml($matchedAlt);
                 $manifest['img']++;
 
                 // $altText comes from escapeHtml() and may contain `$` or `\`; use
@@ -275,6 +430,197 @@ final class Transformer
             },
             $html,
         );
+    }
+
+    private const IMAGE_ATTRS = ['src', 'data-src', 'data-lazy-src', 'data-lazy', 'data-original'];
+    private const IMAGE_SRCSET_ATTRS = ['srcset', 'data-srcset'];
+
+    private static function readAttr(string $attributes, string $name): ?string
+    {
+        if (!preg_match('/(?:^|\s)' . preg_quote($name, '/') . '\s*=\s*(?:"([^"]*)"|\'([^\']*)\')/i', $attributes, $m)) {
+            return null;
+        }
+
+        return ($m[1] ?? '') !== '' ? $m[1] : ($m[2] ?? ($m[1] ?? ''));
+    }
+
+    /** @return array<int, string> every URL an <img> could be addressed by, in Worker order */
+    private static function imageCandidates(string $attributes): array
+    {
+        $out = [];
+        foreach (self::IMAGE_ATTRS as $name) {
+            $v = self::readAttr($attributes, $name);
+            if ($v !== null && $v !== '') {
+                $out[] = $v;
+            }
+        }
+        foreach (self::IMAGE_SRCSET_ATTRS as $name) {
+            $v = self::readAttr($attributes, $name);
+            if ($v !== null && $v !== '') {
+                foreach (explode(',', $v) as $part) {
+                    $u = preg_split('/\s+/', trim($part))[0] ?? '';
+                    if ($u !== '') {
+                        $out[] = $u;
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Port of seojuice-ssr.js matchKey: resolve against the payload base, skip
+     * data:/blob:, unwrap one /_next/image level, percent-decode the path
+     * (decodeURI), then strip scheme and query.
+     */
+    private static function imageMatchKey(string $candidate, ?string $base, bool $unwrapped = false): ?string
+    {
+        if ($candidate === '') {
+            return null;
+        }
+        $resolved = self::resolveUrl($candidate, $base);
+        if ($resolved === null) {
+            return preg_match('/^(data|blob):/i', $candidate) === 1 ? null : self::normalizeImageUrl($candidate);
+        }
+        if ($resolved['scheme'] === 'data' || $resolved['scheme'] === 'blob') {
+            return null;
+        }
+        if (!$unwrapped && $resolved['path'] === '/_next/image') {
+            parse_str($resolved['query'], $params);
+            $original = $params['url'] ?? null;
+            if (is_string($original) && $original !== '') {
+                $href = $resolved['scheme'] . '://' . $resolved['host'] . $resolved['path'] . ($resolved['query'] !== '' ? '?' . $resolved['query'] : '');
+
+                return self::imageMatchKey($original, $href, true);
+            }
+        }
+
+        return self::normalizeImageUrl($resolved['scheme'] . '://' . $resolved['host'] . self::decodeUriPath($resolved['path']));
+    }
+
+    /**
+     * RFC 3986 resolution, enough for http(s) image URLs. Null when the URL
+     * cannot be resolved (relative with no base), like `new URL()` throwing.
+     *
+     * @return array{scheme: string, host: string, path: string, query: string}|null
+     */
+    private static function resolveUrl(string $candidate, ?string $base): ?array
+    {
+        $candidate = trim($candidate);
+        if (preg_match('/^([a-z][a-z0-9+.\-]*):/i', $candidate, $sm) === 1) {
+            $scheme = strtolower($sm[1]);
+            if (!in_array($scheme, ['http', 'https'], true)) {
+                return ['scheme' => $scheme, 'host' => '', 'path' => '', 'query' => ''];
+            }
+            $parts = parse_url($candidate);
+            if ($parts === false || empty($parts['host'])) {
+                return null;
+            }
+
+            return self::buildResolved($scheme, $parts['host'], $parts['port'] ?? null, $parts['path'] ?? '/', $parts['query'] ?? '');
+        }
+        if ($base === null) {
+            return null;
+        }
+        $b = parse_url($base);
+        if ($b === false || empty($b['scheme']) || empty($b['host'])) {
+            return null;
+        }
+        $scheme = strtolower($b['scheme']);
+        $candidate = explode('#', $candidate)[0];
+
+        if (str_starts_with($candidate, '//')) {
+            $parts = parse_url($scheme . ':' . $candidate);
+            if ($parts === false || empty($parts['host'])) {
+                return null;
+            }
+
+            return self::buildResolved($scheme, $parts['host'], $parts['port'] ?? null, $parts['path'] ?? '/', $parts['query'] ?? '');
+        }
+
+        $query = '';
+        if (str_contains($candidate, '?')) {
+            [$candidate, $query] = explode('?', $candidate, 2);
+        }
+        if ($candidate === '') {
+            $path = $b['path'] ?? '/';
+            $query = $query !== '' ? $query : ($b['query'] ?? '');
+        } elseif ($candidate[0] === '/') {
+            $path = $candidate;
+        } else {
+            $basePath = $b['path'] ?? '/';
+            $path = substr($basePath, 0, (int) strrpos($basePath, '/') + 1) . $candidate;
+        }
+
+        return self::buildResolved($scheme, $b['host'], $b['port'] ?? null, $path, $query);
+    }
+
+    /** @return array{scheme: string, host: string, path: string, query: string} */
+    private static function buildResolved(string $scheme, string $host, ?int $port, string $path, string $query): array
+    {
+        $host = strtolower($host);
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+        if ($port !== null && $port !== $defaultPort) {
+            $host .= ':' . $port;
+        }
+        $out = [];
+        foreach (explode('/', $path === '' ? '/' : $path) as $i => $seg) {
+            if ($seg === '..') {
+                if (count($out) > 1) {
+                    array_pop($out);
+                }
+            } elseif ($seg !== '.') {
+                $out[] = $seg;
+            }
+        }
+        $resolved = implode('/', $out);
+        if (str_ends_with($path, '/.') || str_ends_with($path, '/..')) {
+            $resolved .= '/';
+        }
+
+        return ['scheme' => $scheme, 'host' => $host, 'path' => $resolved === '' ? '/' : $resolved, 'query' => $query];
+    }
+
+    /** JS decodeURI: percent-decode UTF-8 except reserved characters; malformed input stays as is. */
+    private static function decodeUriPath(string $path): string
+    {
+        if (preg_match('/%(?![0-9a-fA-F]{2})/', $path) === 1) {
+            return $path;
+        }
+        $failed = false;
+        $decoded = (string) preg_replace_callback('/(?:%[0-9a-fA-F]{2})+/', static function (array $m) use (&$failed): string {
+            $tokens = str_split($m[0], 3);
+            $out = '';
+            for ($i = 0, $n = count($tokens); $i < $n; $i++) {
+                $byte = hexdec(substr($tokens[$i], 1));
+                if ($byte < 0x80) {
+                    $out .= str_contains(';/?:@&=+$,#', chr($byte)) ? $tokens[$i] : chr($byte);
+                    continue;
+                }
+                $len = $byte >= 0xF0 ? 4 : ($byte >= 0xE0 ? 3 : ($byte >= 0xC0 ? 2 : 0));
+                if ($len === 0 || $i + $len > $n) {
+                    $failed = true;
+
+                    return $m[0];
+                }
+                $bytes = '';
+                for ($k = 0; $k < $len; $k++) {
+                    $bytes .= chr((int) hexdec(substr($tokens[$i + $k], 1)));
+                }
+                if (!mb_check_encoding($bytes, 'UTF-8')) {
+                    $failed = true;
+
+                    return $m[0];
+                }
+                $out .= $bytes;
+                $i += $len - 1;
+            }
+
+            return $out;
+        }, $path);
+
+        return $failed ? $path : $decoded;
     }
 
     /**
@@ -362,13 +708,14 @@ final class Transformer
                     $text = (string) preg_replace_callback(
                         $link['pattern'],
                         static function (array $matches) use ($link, $customLinkClass, &$replacedKeywords, &$manifest): string {
+                            // The Worker anchors the matched page text, keeping its casing.
                             if (isset($replacedKeywords[$link['kl']])) {
                                 return $matches[0];
                             }
 
                             $classAttr = $customLinkClass !== '' ? ' class="seojuice-link ' . $customLinkClass . '"' : '';
                             $csAttr = $link['id'] !== null ? ' data-seojuice-cs="' . $link['id'] . '"' : '';
-                            $replacement = '<a href="' . self::escapeHtml($link['url']) . '"' . $classAttr . $csAttr . '>' . self::escapeHtml($link['keyword']) . '</a>';
+                            $replacement = '<a href="' . self::escapeHtml($link['url']) . '"' . $classAttr . $csAttr . '>' . self::escapeHtml($matches[0]) . '</a>';
 
                             $replacedKeywords[$link['kl']] = true;
                             if ($link['id'] !== null) {
@@ -568,11 +915,10 @@ final class Transformer
             return false;
         }
 
-        // broken_link_fixes is treated as actionable alongside the WP-ported fields
-        // (matches the node/python C1 list). h1 is intentionally NOT actionable on
-        // its own — an h1-only payload flips C1 false so the content no-ops while
-        // the SSR flag still emits, matching node/python exactly.
+        // The Worker (seojuice-ssr.js) applies every transform it is given, so an
+        // h1-only payload is actionable (vector h1_replacement_escapes_html).
         $hasContent = !empty($data['title'])
+            || !empty($data['h1'])
             || !empty($data['meta_description'])
             || !empty($data['suggestions'])
             || !empty($data['images'])

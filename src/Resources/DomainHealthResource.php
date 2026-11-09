@@ -17,8 +17,11 @@ final class DomainHealthResource
     /**
      * @return array<string, mixed>
      */
-    public function get(): array
+    public function get(bool $recompute = false, ?string $domainType = null): array
     {
-        return $this->http->get("websites/{$this->domain}/domain-health/");
+        return $this->http->get("websites/{$this->domain}/domain-health/", [
+            'recompute' => $recompute ? 'true' : null,
+            'domain_type' => $domainType,
+        ]);
     }
 }

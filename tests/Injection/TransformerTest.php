@@ -113,7 +113,7 @@ final class TransformerTest extends TestCase
         $raw = json_encode(json_encode(['@type' => 'Article'], JSON_UNESCAPED_SLASHES), JSON_UNESCAPED_SLASHES);
         $html = Transformer::replaceMetaTags('<html><head></head><body></body></html>', ['structured_data' => $raw], $manifest);
 
-        $this->assertStringContainsString('<script type="application/ld+json" data-seojuice="schema">{"@type":"Article"}</script>', $html);
+        $this->assertStringContainsString('<script type="application/ld+json" data-seojuice="schema">[{"@type":"Article"}]</script>', $html);
         $this->assertSame(1, $manifest['schema']);
     }
 
@@ -125,7 +125,7 @@ final class TransformerTest extends TestCase
         $raw = json_encode(['@type' => 'Article'], JSON_UNESCAPED_SLASHES);
         $html = Transformer::replaceMetaTags('<html><head></head><body></body></html>', ['structured_data' => $raw], $manifest);
 
-        $this->assertStringContainsString('<script type="application/ld+json" data-seojuice="schema">{"@type":"Article"}</script>', $html);
+        $this->assertStringContainsString('<script type="application/ld+json" data-seojuice="schema">[{"@type":"Article"}]</script>', $html);
         $this->assertSame(1, $manifest['schema']);
     }
 
@@ -138,15 +138,36 @@ final class TransformerTest extends TestCase
         $this->assertSame(0, $manifest['schema']);
     }
 
-    public function testReplaceMetaTagsSkipsStructuredDataWhenScriptAlreadyPresent(): void
+    /** Worker vector schema_dedupe_exact_type_present: the page already declares the proposed @type. */
+    public function testReplaceMetaTagsSkipsStructuredDataWhenPageAlreadyDeclaresTheType(): void
     {
         $manifest = $this->emptyManifest();
-        $existing = '<script type="application/ld+json">{}</script>';
-        $raw = json_encode(json_encode(['@type' => 'Article']));
+        $existing = '<script type="application/ld+json">{"@type":"Article"}</script>';
+        $raw = json_encode(['@type' => 'Article']);
         $html = Transformer::replaceMetaTags("<html><head>{$existing}</head><body></body></html>", ['structured_data' => $raw], $manifest);
 
         $this->assertSame($existing, $this->extractHeadInner($html));
         $this->assertSame(0, $manifest['schema']);
+    }
+
+    /** Worker vector schema_dedupe_untyped_node_always_injected: an untyped site block covers nothing. */
+    public function testReplaceMetaTagsInjectsMissingTypeNextToUntypedSiteBlock(): void
+    {
+        $manifest = $this->emptyManifest();
+        $existing = '<script type="application/ld+json">{}</script>';
+        $html = Transformer::replaceMetaTags("<html><head>{$existing}</head><body></body></html>", ['structured_data' => json_encode(['@type' => 'Article'])], $manifest);
+
+        $this->assertStringContainsString($existing . '<script type="application/ld+json" data-seojuice="schema">[{"@type":"Article"}]</script>', $html);
+        $this->assertSame(1, $manifest['schema']);
+    }
+
+    public function testReplaceMetaTagsEscapesLessThanInInjectedSchema(): void
+    {
+        $manifest = $this->emptyManifest();
+        $html = Transformer::replaceMetaTags('<html><head></head><body></body></html>', ['structured_data' => json_encode(['@type' => 'Article', 'headline' => '</script><b>'], JSON_UNESCAPED_SLASHES)], $manifest);
+
+        $this->assertStringContainsString('\\u003c/script>\\u003cb>', $html);
+        $this->assertStringNotContainsString('</script><b>', $html);
     }
 
     public function testReplaceMetaTagsInjectsDollarAndBackslashTextVerbatim(): void
@@ -486,10 +507,10 @@ final class TransformerTest extends TestCase
         $this->assertFalse(Transformer::validateApiResponse(['title' => 'T', 'broken_link_fixes' => 'nope']));
     }
 
-    public function testValidateApiResponseRejectsWhenOnlyH1Present(): void
+    public function testValidateApiResponseAcceptsWhenOnlyH1Present(): void
     {
-        // h1 is intentionally not actionable on its own — matches node/python C1.
-        $this->assertFalse(Transformer::validateApiResponse(['h1' => 'New Heading']));
+        // Worker vector h1_replacement_escapes_html: an h1-only payload is applied.
+        $this->assertTrue(Transformer::validateApiResponse(['h1' => 'New Heading']));
     }
 
     public function testInjectInternalLinksContentAreaLinksInsideParagraphNotNav(): void
@@ -555,5 +576,34 @@ final class TransformerTest extends TestCase
         $html = Transformer::addSsrFlag($existing);
 
         $this->assertSame($existing, $html);
+    }
+
+    /** Worker anchors the matched page text (seojuice-ssr.js:553), not the stored keyword casing. */
+    public function testInternalLinkAnchorKeepsThePageTextCasing(): void
+    {
+        $manifest = $this->emptyManifest();
+        $html = Transformer::injectInternalLinks(
+            '<html><body><p>Read our SEO Guide today.</p></body></html>',
+            ['suggestions' => [['keyword' => 'seo guide', 'url' => '/guide/', 'id' => 5]]],
+            $manifest,
+        );
+
+        $this->assertStringContainsString('>SEO Guide</a>', $html);
+        $this->assertStringNotContainsString('>seo guide</a>', $html);
+    }
+
+    /** seojuice-ssr.js:181-184: types in a top-level array of nodes count as present. */
+    public function testTypesInsideATopLevelArrayBlockCountAsPresent(): void
+    {
+        $manifest = $this->emptyManifest();
+        $existing = '<script type="application/ld+json">[{"@type":"Article"},{"@type":"Organization"}]</script>';
+        $html = Transformer::replaceMetaTags(
+            "<html><head>{$existing}</head><body></body></html>",
+            ['structured_data' => json_encode([['@type' => 'Article'], ['@type' => 'FAQPage']])],
+            $manifest,
+        );
+
+        $this->assertSame(1, substr_count($html, '"@type":"Article"'));
+        $this->assertStringContainsString('data-seojuice="schema">[{"@type":"FAQPage"}]', $html);
     }
 }

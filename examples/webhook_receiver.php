@@ -78,6 +78,26 @@ function onChangeApplied(array $payload): void
 /**
  * @param array<string, mixed> $payload
  */
+function onChangePulled(array $payload): void
+{
+    $change = $payload['change'];
+    $integration = $payload['integration'] ?? 'unknown';
+    error_log(sprintf('[webhook] Change #%d pulled by %s', $change['id'], $integration));
+}
+
+/**
+ * @param array<string, mixed> $payload
+ */
+function onChangeVerified(array $payload): void
+{
+    $change = $payload['change'];
+    $integration = $payload['integration'] ?? 'unknown';
+    error_log(sprintf('[webhook] Change #%d verified by %s', $change['id'], $integration));
+}
+
+/**
+ * @param array<string, mixed> $payload
+ */
 function onChangeReverted(array $payload): void
 {
     $change = $payload['change'];
@@ -165,6 +185,8 @@ match ($payload['event']) {
     'change.created' => onChangeCreated($payload),
     'change.approved' => onChangeApproved($payload),
     'change.applied' => onChangeApplied($payload),
+    'change.pulled' => onChangePulled($payload),
+    'change.verified' => onChangeVerified($payload),
     'change.reverted' => onChangeReverted($payload),
     'change.rejected' => onChangeRejected($payload),
     default => error_log("[webhook] Unhandled event: {$payload['event']}"),
@@ -174,7 +196,7 @@ match ($payload['event']) {
 //   SEOJUICE_WEBHOOK_SECRET=whsec_xxx php -S localhost:8080 examples/webhook_receiver.php
 //
 // Test with curl:
-//   BODY='{"event":"change.created","change":{"id":1,"change_type":"meta_description","page_url":"/blog/test","status":"pending"},"website":{"domain":"example.com"},"timestamp":"2026-03-10T00:00:00Z"}'
+//   BODY='{"event":"change.created","change":{"id":1,"change_type":"meta_description","page_url":"/blog/test","status":"proposed"},"website":{"domain":"example.com"},"timestamp":"2026-03-10T00:00:00Z"}'
 //   SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "your-secret" | awk '{print $2}')
 //   curl -X POST http://localhost:8080/webhooks/seojuice \
 //     -H "Content-Type: application/json" \

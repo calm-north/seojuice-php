@@ -33,7 +33,6 @@ function showSummary(SEOJuice $client, string $domain): void
     echo "  Total: {$summary->total}\n";
     echo "  Open: {$summary->open}\n";
     echo "  Done: {$summary->done}\n";
-    echo "  Snoozed: {$summary->snoozed}\n";
     echo "  Dismissed: {$summary->dismissed}\n";
     echo "  Auto-fixed: {$summary->autoFixed}\n";
     echo "  Done this month: {$summary->doneThisMonth}\n";
@@ -70,8 +69,7 @@ function showGroups(SEOJuice $client, string $domain): void
 
     $result = $client->actionItems($domain)->groups();
     foreach ($result->results as $group) {
-        echo "  {$group->category}: {$group->count} items\n";
-        echo "    Priority distribution: " . json_encode($group->priorityDistribution) . "\n";
+        echo "  {$group->category}: {$group->totalItems} items\n";
     }
 }
 
@@ -93,12 +91,6 @@ function completeItem(SEOJuice $client, string $domain, int $itemId): void
     echo "Completed #{$updated->id}: {$updated->title}\n";
 }
 
-function snoozeItem(SEOJuice $client, string $domain, int $itemId, int $days = 7): void
-{
-    $updated = $client->actionItems($domain)->update($itemId, 'snooze', $days);
-    echo "Snoozed #{$updated->id} for {$days} days\n";
-}
-
 // --- Full workflow ---
 
 showSummary($client, $domain);
@@ -106,4 +98,3 @@ listOpenItems($client, $domain);
 showGroups($client, $domain);
 createCustomItem($client, $domain);
 // completeItem($client, $domain, $itemId);
-// snoozeItem($client, $domain, $itemId, 14);

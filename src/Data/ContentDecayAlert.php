@@ -18,15 +18,19 @@ final class ContentDecayAlert
     public readonly ?float $impressionsChangePct;
     public readonly ?float $positionBaseline;
     public readonly ?float $positionCurrent;
-    public readonly ?float $positionChangePct;
     public readonly bool $isActive;
     public readonly string $detectedAt;
     public readonly ?string $resolvedAt;
     /** @var array<int, mixed> */
     public readonly array $suggestions;
+    public readonly ?float $positionChange;
+    public readonly ?string $signalType;
+    /** @var array<string, mixed> */
+    public readonly array $metrics;
 
     /**
      * @param array<int, mixed> $suggestions
+     * @param array<string, mixed> $metrics
      */
     public function __construct(
         int $id,
@@ -41,11 +45,13 @@ final class ContentDecayAlert
         ?float $impressionsChangePct,
         ?float $positionBaseline,
         ?float $positionCurrent,
-        ?float $positionChangePct,
         bool $isActive,
         string $detectedAt,
         ?string $resolvedAt,
         array $suggestions,
+        ?float $positionChange = null,
+        ?string $signalType = null,
+        array $metrics = [],
     ) {
         $this->id = $id;
         $this->pageUrl = $pageUrl;
@@ -59,11 +65,13 @@ final class ContentDecayAlert
         $this->impressionsChangePct = $impressionsChangePct;
         $this->positionBaseline = $positionBaseline;
         $this->positionCurrent = $positionCurrent;
-        $this->positionChangePct = $positionChangePct;
         $this->isActive = $isActive;
         $this->detectedAt = $detectedAt;
         $this->resolvedAt = $resolvedAt;
         $this->suggestions = $suggestions;
+        $this->positionChange = $positionChange;
+        $this->signalType = $signalType;
+        $this->metrics = $metrics;
     }
 
     /**
@@ -84,11 +92,13 @@ final class ContentDecayAlert
             impressionsChangePct: isset($data['impressions_change_pct']) ? (float) $data['impressions_change_pct'] : null,
             positionBaseline: isset($data['position_baseline']) ? (float) $data['position_baseline'] : null,
             positionCurrent: isset($data['position_current']) ? (float) $data['position_current'] : null,
-            positionChangePct: isset($data['position_change_pct']) ? (float) $data['position_change_pct'] : null,
             isActive: (bool) ($data['is_active'] ?? false),
             detectedAt: (string) ($data['detected_at'] ?? ''),
             resolvedAt: $data['resolved_at'] ?? null,
             suggestions: $data['suggestions'] ?? [],
+            positionChange: isset($data['position_change']) ? (float) $data['position_change'] : null,
+            signalType: $data['signal_type'] ?? null,
+            metrics: $data['metrics'] ?? [],
         );
     }
 }

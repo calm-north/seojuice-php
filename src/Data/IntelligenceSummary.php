@@ -19,6 +19,10 @@ final class IntelligenceSummary
     public readonly ?array $history;
     /** @var array<string, mixed>|null */
     public readonly ?array $trends;
+    public readonly ?float $domainHealthScore;
+    public readonly ?float $avgContentQualityScore;
+    public readonly ?float $avgGeoReadinessScore;
+    public readonly int $totalSeojuiceLinks;
 
     /**
      * @param array<string, mixed>|null $history
@@ -36,6 +40,10 @@ final class IntelligenceSummary
         ?string $lastCrawledAt,
         ?array $history,
         ?array $trends,
+        ?float $domainHealthScore = null,
+        ?float $avgContentQualityScore = null,
+        ?float $avgGeoReadinessScore = null,
+        int $totalSeojuiceLinks = 0,
     ) {
         $this->domain = $domain;
         $this->seoScore = $seoScore;
@@ -48,6 +56,10 @@ final class IntelligenceSummary
         $this->lastCrawledAt = $lastCrawledAt;
         $this->history = $history;
         $this->trends = $trends;
+        $this->domainHealthScore = $domainHealthScore;
+        $this->avgContentQualityScore = $avgContentQualityScore;
+        $this->avgGeoReadinessScore = $avgGeoReadinessScore;
+        $this->totalSeojuiceLinks = $totalSeojuiceLinks;
     }
 
     /**
@@ -67,6 +79,10 @@ final class IntelligenceSummary
             lastCrawledAt: $data['last_crawled_at'] ?? null,
             history: $data['history'] ?? null,
             trends: $data['trends'] ?? null,
+            domainHealthScore: isset($data['domain_health_score']) ? (float) $data['domain_health_score'] : null,
+            avgContentQualityScore: isset($data['avg_content_quality_score']) ? (float) $data['avg_content_quality_score'] : null,
+            avgGeoReadinessScore: isset($data['avg_geo_readiness_score']) ? (float) $data['avg_geo_readiness_score'] : null,
+            totalSeojuiceLinks: (int) ($data['total_seojuice_links'] ?? 0),
         );
     }
 }

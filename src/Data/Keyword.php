@@ -16,7 +16,15 @@ final class Keyword
     public readonly ?float $competition;
     public readonly ?int $aiSearchVolume;
     public readonly ?string $lastUpdated;
+    /** @var array<string, mixed>|null */
+    public readonly ?array $serpFeatures;
+    /** @var array<string, mixed>|null */
+    public readonly ?array $serpEnrichment;
 
+    /**
+     * @param array<string, mixed>|null $serpFeatures
+     * @param array<string, mixed>|null $serpEnrichment
+     */
     public function __construct(
         int $id,
         string $name,
@@ -28,6 +36,8 @@ final class Keyword
         ?float $competition,
         ?int $aiSearchVolume,
         ?string $lastUpdated,
+        ?array $serpFeatures = null,
+        ?array $serpEnrichment = null,
     ) {
         $this->id = $id;
         $this->name = $name;
@@ -39,6 +49,8 @@ final class Keyword
         $this->competition = $competition;
         $this->aiSearchVolume = $aiSearchVolume;
         $this->lastUpdated = $lastUpdated;
+        $this->serpFeatures = $serpFeatures;
+        $this->serpEnrichment = $serpEnrichment;
     }
 
     /**
@@ -57,6 +69,8 @@ final class Keyword
             competition: isset($data['competition']) ? (float) $data['competition'] : null,
             aiSearchVolume: isset($data['ai_search_volume']) ? (int) $data['ai_search_volume'] : null,
             lastUpdated: $data['last_updated'] ?? null,
+            serpFeatures: $data['serp_features'] ?? null,
+            serpEnrichment: $data['serp_enrichment'] ?? null,
         );
     }
 }

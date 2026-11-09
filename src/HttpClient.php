@@ -10,6 +10,7 @@ use GuzzleHttp\Exception\RequestException;
 use SEOJuice\Exceptions\AuthException;
 use SEOJuice\Exceptions\ForbiddenException;
 use SEOJuice\Exceptions\NotFoundException;
+use SEOJuice\Exceptions\PaymentRequiredException;
 use SEOJuice\Exceptions\RateLimitException;
 use SEOJuice\Exceptions\SEOJuiceException;
 use SEOJuice\Exceptions\ServerException;
@@ -168,21 +169,32 @@ class HttpClient
         }
 
         $message = $decoded['detail'] ?? $decoded['message'] ?? $e->getMessage();
-        $errorCode = $decoded['error_code'] ?? 'unknown';
+        $errorCode = $decoded['error'] ?? $decoded['error_code'] ?? 'unknown';
+        if (!is_string($errorCode)) {
+            $errorCode = 'unknown';
+        }
+        $extra = [
+            'checkout_url' => isset($decoded['checkout_url']) ? (string) $decoded['checkout_url'] : null,
+            'lock_state' => isset($decoded['lock_state']) ? (string) $decoded['lock_state'] : null,
+        ];
 
         $retryAfterHeader = $response !== null ? $response->getHeaderLine('Retry-After') : '';
         $retryAfter = ($retryAfterHeader !== '' && ctype_digit($retryAfterHeader)) ? (int) $retryAfterHeader : null;
 
-        $this->throwForStatus($status, $message, $errorCode, $retryAfter);
+        $this->throwForStatus($status, $message, $errorCode, $retryAfter, $extra);
     }
 
     /**
      * @return never
      */
-    private function throwForStatus(int $status, string $message, string $errorCode, ?int $retryAfter = null): never
+    /**
+     * @param array{checkout_url: ?string, lock_state: ?string} $extra
+     */
+    private function throwForStatus(int $status, string $message, string $errorCode, ?int $retryAfter = null, array $extra = ['checkout_url' => null, 'lock_state' => null]): never
     {
         throw match (true) {
             $status === 401 => new AuthException($message, $errorCode),
+            $status === 402 => new PaymentRequiredException($message, $errorCode, $extra['checkout_url'], $extra['lock_state']),
             $status === 403 => new ForbiddenException($message, $errorCode),
             $status === 404 => new NotFoundException($message, $errorCode),
             $status === 429 => new RateLimitException($message, $errorCode, $retryAfter),

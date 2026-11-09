@@ -11,6 +11,8 @@ final class Link
     public readonly ?string $keyword;
     public readonly ?int $impressions;
     public readonly ?string $createdAt;
+    public readonly ?int $clicks;
+    public readonly ?float $ctr;
 
     public function __construct(
         string $pageFrom,
@@ -18,12 +20,16 @@ final class Link
         ?string $keyword,
         ?int $impressions,
         ?string $createdAt,
+        ?int $clicks = null,
+        ?float $ctr = null,
     ) {
         $this->pageFrom = $pageFrom;
         $this->pageTo = $pageTo;
         $this->keyword = $keyword;
         $this->impressions = $impressions;
         $this->createdAt = $createdAt;
+        $this->clicks = $clicks;
+        $this->ctr = $ctr;
     }
 
     /**
@@ -37,6 +43,8 @@ final class Link
             keyword: $data['keyword'] ?? null,
             impressions: isset($data['impressions']) ? (int) $data['impressions'] : null,
             createdAt: $data['created_at'] ?? null,
+            clicks: isset($data['clicks']) ? (int) $data['clicks'] : null,
+            ctr: isset($data['ctr']) ? (float) $data['ctr'] : null,
         );
     }
 }

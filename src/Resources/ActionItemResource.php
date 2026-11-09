@@ -8,6 +8,7 @@ use SEOJuice\Data\ActionItem;
 use SEOJuice\Data\ActionItemGroup;
 use SEOJuice\Data\ActionItemSummary;
 use SEOJuice\Data\PaginatedResult;
+use SEOJuice\Exceptions\ValidationException;
 use SEOJuice\HttpClient;
 
 final class ActionItemResource
@@ -24,11 +25,13 @@ final class ActionItemResource
         ?string $priority = null,
         int $page = 1,
         int $pageSize = 10,
+        ?string $sourceType = null,
     ): PaginatedResult {
         $data = $this->http->get("websites/{$this->domain}/action-items/", [
             'status' => $status,
             'category' => $category,
             'priority' => $priority,
+            'source_type' => $sourceType,
             'page' => $page,
             'page_size' => $pageSize,
         ]);
@@ -53,14 +56,21 @@ final class ActionItemResource
         return ActionItem::fromArray($data);
     }
 
-    public function update(int $itemId, string $action, ?int $snoozeDays = null): ActionItem
+    public const ACTIONS = ['done', 'in_progress', 'dismiss', 'reopen'];
+
+    /**
+     * @param string $action one of self::ACTIONS
+     */
+    public function update(int $itemId, string $action): ActionItem
     {
-        $body = ['action' => $action];
-        if ($snoozeDays !== null) {
-            $body['snooze_days'] = $snoozeDays;
+        if (!in_array($action, self::ACTIONS, true)) {
+            throw new ValidationException(
+                'Invalid action. Must be one of: ' . implode(', ', self::ACTIONS),
+                'validation_error',
+            );
         }
 
-        $data = $this->http->patch("websites/{$this->domain}/action-items/{$itemId}/", $body);
+        $data = $this->http->patch("websites/{$this->domain}/action-items/{$itemId}/", ['action' => $action]);
 
         return ActionItem::fromArray($data);
     }
